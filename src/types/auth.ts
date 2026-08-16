@@ -62,3 +62,17 @@ export interface LoginPayload {
   email: string;
   password: string;
 }
+
+export interface ForgotPasswordPayload {
+  email: string;
+}
+
+export interface ResetPasswordOtpPayload {
+  email: string;
+  token: string;
+  newPassword: string;
+}
+
+export interface MessageResponse {
+  message: string;
+}

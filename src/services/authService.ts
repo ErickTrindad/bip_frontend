@@ -1,5 +1,12 @@
 import { request } from './api';
-import type { AuthResponse, LoginPayload, RegisterPayload } from '../types/auth';
+import type {
+  AuthResponse,
+  LoginPayload,
+  RegisterPayload,
+  ForgotPasswordPayload,
+  ResetPasswordOtpPayload,
+  MessageResponse,
+} from '../types/auth';
 
 export const authService = {
   async register(payload: RegisterPayload): Promise<AuthResponse> {
@@ -16,6 +23,20 @@ export const authService = {
 
   async login(payload: LoginPayload): Promise<AuthResponse> {
     return request<AuthResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async forgotPassword(payload: ForgotPasswordPayload): Promise<MessageResponse> {
+    return request<MessageResponse>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async resetPasswordWithOtp(payload: ResetPasswordOtpPayload): Promise<MessageResponse> {
+    return request<MessageResponse>('/auth/reset-password', {
       method: 'POST',
       body: JSON.stringify(payload),
     });

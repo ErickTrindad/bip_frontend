@@ -12,12 +12,14 @@ import type { LoginPayload } from "../../types/auth";
 
 interface LoginFormProps {
   onSubmit: (data: LoginPayload) => Promise<void>;
+  onForgotPassword: () => void;
   isLoading: boolean;
   error?: string | null;
 }
 
 export function LoginForm({
   onSubmit,
+  onForgotPassword,
   isLoading,
   error,
 }: LoginFormProps) {
@@ -75,16 +77,13 @@ export function LoginForm({
             <label className="block text-xs font-bold text-text-primary uppercase tracking-wide">
               Senha
             </label>
-            <a
-              href="#forgot-password"
-              onClick={(e) => {
-                e.preventDefault();
-                alert("Recuperação de senha via Supabase Auth em breve.");
-              }}
-              className="text-[11px] font-bold text-brand-600 hover:text-brand-700 transition-colors"
+            <button
+              type="button"
+              onClick={onForgotPassword}
+              className="text-[11px] font-bold text-brand-600 hover:text-brand-700 transition-colors cursor-pointer"
             >
               Esqueceu a senha?
-            </a>
+            </button>
           </div>
           <div className="relative">
             <Lock className="w-4 h-4 absolute left-3.5 top-3.5 text-text-muted" />
