@@ -1,0 +1,33 @@
+{
+  "design_system_tokens": {
+    "brand_colors": {
+      "brand_50": "#FFF7ED",
+      "brand_100": "#FFEDD5",
+      "brand_500": "#F97316",
+      "brand_600_cta": "#EA580C",
+      "brand_700_hover": "#C2410C",
+      "brand_900": "#7C2D12"
+    },
+    "surface_and_neutrals": {
+      "canvas_background": "#FAFAFA",
+      "card_surface": "#FFFFFF",
+      "border_neutral": "#E5E5E5",
+      "text_muted": "#737373",
+      "text_primary": "#171717"
+    },
+    "semantic_status": {
+      "success_full_shelf": {
+        "base": "#16A34A",
+        "bg": "#F0FDF4"
+      },
+      "warning_medium_shelf": {
+        "base": "#CA8A04",
+        "bg": "#FEFCE8"
+      },
+      "danger_critical_shelf": {
+        "base": "#DC2626",
+        "bg": "#FEF2F2"
+      }
+    }
+  }
+}
