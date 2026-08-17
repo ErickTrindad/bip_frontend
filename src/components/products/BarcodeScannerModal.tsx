@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
-import { Camera, X, RefreshCw, AlertCircle, Upload } from 'lucide-react';
+import { Camera, X, RefreshCw, AlertCircle, Upload, ShieldAlert, RotateCw } from 'lucide-react';
 
 interface BarcodeScannerModalProps {
   isOpen: boolean;
@@ -28,91 +28,21 @@ export function BarcodeScannerModal({
   title = 'Escanear Código de Barras',
 }: BarcodeScannerModalProps) {
   const [error, setError] = useState<string | null>(null);
+  const [isPermissionError, setIsPermissionError] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [manualCode, setManualCode] = useState('');
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const isRunningRef = useRef(false);
 
-  useEffect(() => {
-    if (!isOpen) {
-      cleanupScanner();
-      return;
-    }
-
-    const startScanner = async () => {
-      setError(null);
-      setIsStarting(true);
-      try {
-        const scannerId = 'barcode-scanner-viewport';
-        const html5QrCode = new Html5Qrcode(scannerId, {
-          formatsToSupport: SUPPORTED_BARCODE_FORMATS,
-          verbose: false,
-          experimentalFeatures: {
-            useBarCodeDetectorIfSupported: true,
-          },
-        });
-        scannerRef.current = html5QrCode;
-
-        // Configuração de câmera com alta resolução e foco contínuo se suportado
-        const cameraConfig = {
-          facingMode: 'environment',
-          focusMode: 'continuous',
-          width: { min: 640, ideal: 1280, max: 1920 },
-          height: { min: 480, ideal: 720, max: 1080 },
-        };
-
-        await html5QrCode.start(
-          cameraConfig,
-          {
-            fps: 10,
-            qrbox: (viewfinderWidth, viewfinderHeight) => {
-              // Caixa retangular ampla otimizada para códigos de barra 1D (EAN-13, CODE-128)
-              const width = Math.min(Math.floor(viewfinderWidth * 0.85), 350);
-              const height = Math.min(Math.floor(viewfinderHeight * 0.4), 160);
-              return { width, height };
-            },
-            disableFlip: true,
-          },
-          (decodedText) => {
-            const clean = decodedText.trim();
-            if (clean) {
-              onScan(clean);
-              cleanupScanner();
-              onClose();
-            }
-          },
-          () => {
-            // Callback silencioso para frames sem código
-          }
-        );
-        isRunningRef.current = true;
-      } catch (err: unknown) {
-        console.error('Erro ao acessar a câmera:', err);
-        setError(
-          'Não foi possível inicializar a câmera (permissão negada ou dispositivo sem suporte). Você pode fazer upload de uma foto ou digitar o código.'
-        );
-      } finally {
-        setIsStarting(false);
-      }
-    };
-
-    const timer = setTimeout(() => {
-      startScanner();
-    }, 250);
-
-    return () => {
-      clearTimeout(timer);
-      cleanupScanner();
-    };
-  }, [isOpen, onClose, onScan]);
-
   const cleanupScanner = async () => {
-    if (scannerRef.current && isRunningRef.current) {
-      try {
-        await scannerRef.current.stop();
-      } catch (err) {
-        console.warn('Erro ao parar scanner:', err);
+    if (scannerRef.current) {
+      if (isRunningRef.current) {
+        try {
+          await scannerRef.current.stop();
+        } catch (err) {
+          console.warn('Erro ao parar scanner:', err);
+        }
       }
       try {
         scannerRef.current.clear();
@@ -123,6 +53,108 @@ export function BarcodeScannerModal({
       scannerRef.current = null;
     }
   };
+
+  const startScanner = async () => {
+    await cleanupScanner();
+    setError(null);
+    setIsPermissionError(false);
+    setIsStarting(true);
+
+    try {
+      // Tentar solicitar permissão explicitamente via getUserMedia caso o navegador suporte
+      if (navigator?.mediaDevices?.getUserMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment' },
+          });
+          // Para as tracks temporárias para liberar a câmera para o html5-qrcode
+          stream.getTracks().forEach((track) => track.stop());
+        } catch (mediaErr: unknown) {
+          const errObj = mediaErr as { name?: string; message?: string } | undefined;
+          if (
+            errObj?.name === 'NotAllowedError' ||
+            errObj?.name === 'PermissionDeniedError'
+          ) {
+            setIsPermissionError(true);
+            setError(
+              'Acesso à câmera bloqueado. Clique no botão abaixo para tentar autorizar ou habilite a câmera nas configurações do navegador.'
+            );
+            return;
+          }
+        }
+      }
+
+      const scannerId = 'barcode-scanner-viewport';
+      const html5QrCode = new Html5Qrcode(scannerId, {
+        formatsToSupport: SUPPORTED_BARCODE_FORMATS,
+        verbose: false,
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true,
+        },
+      });
+      scannerRef.current = html5QrCode;
+
+      const cameraConfig = { facingMode: 'environment' };
+
+      await html5QrCode.start(
+        cameraConfig,
+        {
+          fps: 10,
+          qrbox: (viewfinderWidth, viewfinderHeight) => {
+            const width = Math.min(Math.floor(viewfinderWidth * 0.85), 350);
+            const height = Math.min(Math.floor(viewfinderHeight * 0.4), 160);
+            return { width, height };
+          },
+          disableFlip: true,
+        },
+        (decodedText) => {
+          const clean = decodedText.trim();
+          if (clean) {
+            onScan(clean);
+            cleanupScanner();
+            onClose();
+          }
+        },
+        () => {
+          // Callback silencioso para frames sem código
+        }
+      );
+      isRunningRef.current = true;
+    } catch (err: unknown) {
+      console.error('Erro ao acessar a câmera:', err);
+      const errObj = err as { name?: string; message?: string } | undefined;
+      const isDenied =
+        errObj?.name === 'NotAllowedError' ||
+        errObj?.name === 'PermissionDeniedError' ||
+        (typeof err === 'string' && err.toLowerCase().includes('permission')) ||
+        (errObj?.message && errObj.message.toLowerCase().includes('permission'));
+
+      setIsPermissionError(Boolean(isDenied));
+      setError(
+        isDenied
+          ? 'Acesso à câmera bloqueado. Clique no botão abaixo para tentar autorizar ou altere nas configurações de permissão do navegador.'
+          : 'Não foi possível inicializar a câmera. Você pode tentar novamente, enviar uma foto ou digitar o código.'
+      );
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) {
+      cleanupScanner();
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      startScanner();
+    }, 250);
+
+    return () => {
+      clearTimeout(timer);
+      cleanupScanner();
+    };
+  }, [isOpen, onClose, onScan]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -196,8 +228,27 @@ export function BarcodeScannerModal({
 
           {error && (
             <div className="absolute inset-0 bg-neutral-900/95 flex flex-col items-center justify-center text-white gap-3 p-6 text-center z-10">
-              <AlertCircle className="w-10 h-10 text-status-danger" />
-              <p className="text-xs font-semibold text-status-danger leading-relaxed">{error}</p>
+              {isPermissionError ? (
+                <ShieldAlert className="w-10 h-10 text-status-warning" />
+              ) : (
+                <AlertCircle className="w-10 h-10 text-status-danger" />
+              )}
+              <p className="text-xs font-semibold text-neutral-200 leading-relaxed max-w-[280px]">
+                {error}
+              </p>
+              <button
+                type="button"
+                onClick={() => startScanner()}
+                className="mt-1 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+                {isPermissionError ? 'Solicitar / Autorizar Câmera' : 'Tentar Novamente'}
+              </button>
+              {isPermissionError && (
+                <span className="text-[10px] text-neutral-400">
+                  Dica: Se o navegador não exibir o pop-up, clique no ícone de cadeado/permissões ao lado da URL.
+                </span>
+              )}
             </div>
           )}
         </div>
