@@ -1,10 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  WifiOff,
-  ShieldCheck,
-  CircleAlert,
-} from "lucide-react";
+import { WifiOff, ShieldCheck, CircleAlert } from "lucide-react";
 import { LoginForm } from "../components/auth/LoginForm";
 import { RegisterForm } from "../components/auth/RegisterForm";
 import { ForgotPasswordForm } from "../components/auth/ForgotPasswordForm";
@@ -77,7 +73,7 @@ export function AuthPage() {
     <div className="bg-canvas text-text-primary min-h-screen flex items-center justify-center p-3 sm:p-6 antialiased">
       {/* Main Container */}
       <main className="w-full max-w-4xl">
-        <div className="bg-card rounded-3xl shadow-xl sm:shadow-2xl sm:shadow-neutral-200/60 overflow-hidden border border-border-neutral grid grid-cols-1 md:grid-cols-12 min-h-[620px]">
+        <div className="bg-card rounded-3xl shadow-xl sm:shadow-2xl sm:shadow-neutral-200/60 overflow-hidden border border-border-neutral grid grid-cols-1 md:grid-cols-12 min-h-155">
           {/* Left Hero Sidebar (hidden on mobile, visible on desktop) */}
           <div className="hidden md:flex md:col-span-5 bg-brand-50 p-8 flex-col justify-between relative overflow-hidden border-r border-border-neutral/60">
             <div className="absolute -top-24 -left-24 w-64 h-64 bg-brand-100/60 rounded-full blur-3xl" />
@@ -86,16 +82,14 @@ export function AuthPage() {
             <div className="relative z-10 mt-4">
               <div className="inline-flex items-center gap-2 bg-card border border-brand-100 px-3 py-1.5 rounded-full text-[11px] font-bold text-brand-700 mb-8 shadow-sm uppercase tracking-wider">
                 <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
-                Simples, Rápido e Seguro
+                Reposição e PDV sem complicação
               </div>
               <h2 className="text-3xl font-extrabold text-text-primary leading-tight mb-4 tracking-tight">
-                O controle da sua loja,
-                <br />
-                agora nas suas mãos.
+                Nunca mais perca vendas por prateleira vazia.
               </h2>
               <p className="text-text-muted text-sm leading-relaxed font-medium">
-                Abandone as planilhas complexas. Nosso sistema foi desenhado para ser tão fácil de usar quanto um
-                aplicativo de mensagens.
+                Esqueça cadernos e planilhas confusas. Saiba exatamente o que
+                repor na gôndola e venda no caixa em segundos.
               </p>
             </div>
 
@@ -105,9 +99,12 @@ export function AuthPage() {
                   <CircleAlert className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-text-primary">Interface Minimalista</h3>
+                  <h3 className="text-sm font-bold text-text-primary">
+                    Alerta de Gôndola Vazia
+                  </h3>
                   <p className="text-xs text-text-muted mt-0.5 leading-relaxed">
-                    Sem poluição visual. Foco total nas operações do seu caixa e estoque.
+                    O sistema avisa na hora o que acabou na frente da loja e
+                    onde buscar no depósito dos fundos.
                   </p>
                 </div>
               </div>
@@ -117,9 +114,12 @@ export function AuthPage() {
                   <WifiOff className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-text-primary">Offline-First (PWA)</h3>
+                  <h3 className="text-sm font-bold text-text-primary">
+                    Venda mesmo sem internet
+                  </h3>
                   <p className="text-xs text-text-muted mt-0.5 leading-relaxed">
-                    Continue registrando vendas e bipes no chão de loja mesmo se a internet cair.
+                    Se a rede oscilar, o PDV não trava. Suas vendas continuam
+                    rodando e sincronizam sozinhas depois.
                   </p>
                 </div>
               </div>
@@ -128,7 +128,8 @@ export function AuthPage() {
             <div className="relative z-10 pt-6 border-t border-brand-100 text-xs text-text-muted font-medium flex items-center justify-between">
               <span>Tecnologia em Nuvem</span>
               <span className="flex items-center gap-1.5 text-text-primary">
-                <ShieldCheck className="w-4 h-4 text-status-success" /> Dados Seguros
+                <ShieldCheck className="w-4 h-4 text-status-success" /> Dados
+                Seguros
               </span>
             </div>
           </div>
