@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import {
   X,
   ShoppingCart,
@@ -22,14 +22,17 @@ interface PosSaleModalProps {
   onSuccess: (response: PosSaleResponse) => void;
   onOpenScanner: () => void;
   catalogProducts: Product[];
+  scannedBarcode?: string | null;
+  onBarcodeConsumed?: () => void;
 }
-
 export function PosSaleModal({
   isOpen,
   onClose,
   onSuccess,
   onOpenScanner,
   catalogProducts,
+  scannedBarcode,
+  onBarcodeConsumed,
 }: PosSaleModalProps) {
   const [items, setItems] = useState<PosSaleItem[]>([]);
   const [barcodeInput, setBarcodeInput] = useState('');
@@ -37,9 +40,18 @@ export function PosSaleModal({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('PIX');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen && scannedBarcode) {
+      handleAddItemByBarcode(scannedBarcode, 1);
+      if (onBarcodeConsumed) {
+        onBarcodeConsumed();
+      }
+    }
+  }, [isOpen, scannedBarcode, onBarcodeConsumed]);
+
   const [successResult, setSuccessResult] = useState<PosSaleResponse | null>(null);
 
-  if (!isOpen) return null;
   const handleAddItemByBarcode = (code: string, qty: number = 1) => {
     setErrorMessage(null);
     const trimmed = code.trim();
@@ -136,6 +148,8 @@ export function PosSaleModal({
     setErrorMessage(null);
     onClose();
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-sm animate-fade-in overflow-y-auto">

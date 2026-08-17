@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { BrowserMultiFormatReader } from '@zxing/browser';
+import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 import { Camera, X, RefreshCw, AlertCircle, Upload, ShieldAlert, RotateCw } from 'lucide-react';
 
 interface BarcodeScannerModalProps {
@@ -105,7 +107,7 @@ export function BarcodeScannerModal({
             const height = Math.min(Math.floor(viewfinderHeight * 0.4), 160);
             return { width, height };
           },
-          disableFlip: true,
+          disableFlip: false,
         },
         (decodedText) => {
           const clean = decodedText.trim();
@@ -163,24 +165,142 @@ export function BarcodeScannerModal({
     try {
       setIsStarting(true);
       setError(null);
-      let scanner = scannerRef.current;
-      if (!scanner) {
-        scanner = new Html5Qrcode('barcode-scanner-viewport', {
-          formatsToSupport: SUPPORTED_BARCODE_FORMATS,
-          verbose: false,
-        });
+
+      const imageBitmap = await createImageBitmap(file);
+      const variations: (ImageBitmap | HTMLCanvasElement)[] = [imageBitmap];
+
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      
+      if (ctx) {
+        // Variação 2: Crop de 50% no centro (Simula o qrbox da câmera)
+        const crop1Canvas = document.createElement('canvas');
+        const crop1Ctx = crop1Canvas.getContext('2d');
+        if (crop1Ctx) {
+          const cw = imageBitmap.width * 0.5;
+          const ch = imageBitmap.height * 0.5;
+          const cx = (imageBitmap.width - cw) / 2;
+          const cy = (imageBitmap.height - ch) / 2;
+          crop1Canvas.width = cw;
+          crop1Canvas.height = ch;
+          crop1Ctx.drawImage(imageBitmap, cx, cy, cw, ch, 0, 0, cw, ch);
+          variations.push(crop1Canvas);
+        }
+
+        // Variação 3: Crop mais fechado (30% do centro)
+        const crop2Canvas = document.createElement('canvas');
+        const crop2Ctx = crop2Canvas.getContext('2d');
+        if (crop2Ctx) {
+          const cw2 = imageBitmap.width * 0.3;
+          const ch2 = imageBitmap.height * 0.3;
+          const cx2 = (imageBitmap.width - cw2) / 2;
+          const cy2 = (imageBitmap.height - ch2) / 2;
+          crop2Canvas.width = cw2;
+          crop2Canvas.height = ch2;
+          crop2Ctx.drawImage(imageBitmap, cx2, cy2, cw2, ch2, 0, 0, cw2, ch2);
+          variations.push(crop2Canvas);
+        }
+
+        // Variação 4: Redimensionado max 1024px (evita esmagamento de barras finas no ZXing)
+        const scaleCanvas = document.createElement('canvas');
+        const scaleCtx = scaleCanvas.getContext('2d');
+        if (scaleCtx) {
+          const scale = Math.min(1024 / imageBitmap.width, 1024 / imageBitmap.height);
+          if (scale < 1) {
+            scaleCanvas.width = imageBitmap.width * scale;
+            scaleCanvas.height = imageBitmap.height * scale;
+            scaleCtx.drawImage(imageBitmap, 0, 0, scaleCanvas.width, scaleCanvas.height);
+            variations.push(scaleCanvas);
+          }
+        }
       }
-      const decodedResult = await scanner.scanFile(file, true);
-      if (decodedResult) {
-        onScan(decodedResult.trim());
-        cleanupScanner();
-        onClose();
+
+      // Fase 1: Testar todas as variações no BarcodeDetector Nativo (super rápido)
+      if ('BarcodeDetector' in window) {
+        try {
+          // @ts-ignore
+          const barcodeDetector = new window.BarcodeDetector({
+            formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'code_93', 'upc_a', 'upc_e', 'itf', 'qr_code'],
+          });
+
+          for (const variation of variations) {
+            const barcodes = await barcodeDetector.detect(variation);
+            if (barcodes && barcodes.length > 0) {
+              const decodedText = barcodes[0].rawValue.trim();
+              if (decodedText) {
+                onScan(decodedText);
+                cleanupScanner();
+                onClose();
+                return;
+              }
+            }
+          }
+        } catch (detectorErr) {
+          console.warn('BarcodeDetector nativo falhou em alguma variação', detectorErr);
+        }
       }
+
+      // Fase 2: Fallback para o @zxing/browser
+      try {
+        const hints = new Map<DecodeHintType, any>();
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+          BarcodeFormat.EAN_13,
+          BarcodeFormat.EAN_8,
+          BarcodeFormat.CODE_128,
+          BarcodeFormat.CODE_39,
+          BarcodeFormat.CODE_93,
+          BarcodeFormat.UPC_A,
+          BarcodeFormat.UPC_E,
+          BarcodeFormat.ITF,
+          BarcodeFormat.QR_CODE
+        ]);
+        hints.set(DecodeHintType.TRY_HARDER, true);
+
+        const zxingReader = new BrowserMultiFormatReader(hints);
+
+        for (const variation of variations) {
+          try {
+            let result;
+            if (variation instanceof HTMLCanvasElement) {
+              result = zxingReader.decodeFromCanvas(variation);
+            } else {
+              const tmpCanvas = document.createElement('canvas');
+              const tmpCtx = tmpCanvas.getContext('2d');
+              if (tmpCtx) {
+                tmpCanvas.width = variation.width;
+                tmpCanvas.height = variation.height;
+                tmpCtx.drawImage(variation, 0, 0);
+                result = zxingReader.decodeFromCanvas(tmpCanvas);
+              }
+            }
+            
+            if (result) {
+              const text = result.getText().trim();
+              if (text) {
+                onScan(text);
+                cleanupScanner();
+                onClose();
+                return;
+              }
+            }
+          } catch (e) {
+            // ignora e vai pra próxima variação
+          }
+        }
+      } catch (err) {
+        console.warn('Erro fatal no ZXing Fallback:', err);
+      }
+
+      // Se rodou todas as variações e não achou
+      setError('Código de barras perdido no fundo. Tente recortar a imagem antes de enviar ou use a câmera.');
     } catch (err: unknown) {
-      console.warn('Erro ao ler imagem:', err);
-      setError('Código de barras não identificado na imagem enviada. Tente outra foto ou digite manualmente.');
+      console.warn('Erro ao processar arquivo:', err);
+      setError('Erro ao ler o arquivo. Tente outra foto ou digite manualmente.');
     } finally {
       setIsStarting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 

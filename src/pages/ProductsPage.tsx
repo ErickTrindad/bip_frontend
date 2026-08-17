@@ -48,6 +48,7 @@ export function ProductsPage() {
   const [isPosModalOpen, setIsPosModalOpen] = useState(false);
   const [isScannerModalOpen, setIsScannerModalOpen] = useState(false);
   const [scannerTarget, setScannerTarget] = useState<'search' | 'create' | 'pos'>('search');
+  const [posScannedBarcode, setPosScannedBarcode] = useState<string | null>(null);
 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [productToEdit, setProductToEdit] = useState<Product | null>(null);
@@ -202,7 +203,6 @@ export function ProductsPage() {
       setTimeout(() => setFeedbackMessage(null), 4000);
     }
   };
-
   const handleScanComplete = (code: string) => {
     if (scannerTarget === 'search') {
       setSearchTerm(code);
@@ -210,6 +210,8 @@ export function ProductsPage() {
       setProductToEdit(null);
       setSelectedProduct(null);
       setIsFormModalOpen(true);
+    } else if (scannerTarget === 'pos') {
+      setPosScannedBarcode(code);
     }
   };
 
@@ -760,6 +762,8 @@ export function ProductsPage() {
           setIsScannerModalOpen(true);
         }}
         catalogProducts={products}
+        scannedBarcode={posScannedBarcode}
+        onBarcodeConsumed={() => setPosScannedBarcode(null)}
       />
 
       <BarcodeScannerModal
