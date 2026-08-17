@@ -54,25 +54,25 @@ export function BarcodeScannerModal({
         });
         scannerRef.current = html5QrCode;
 
-        // Tentar obter lista de câmeras ou iniciar diretamente com camera traseira
-        const cameras = await Html5Qrcode.getCameras().catch(() => []);
-        const cameraConfig =
-          cameras.length > 0
-            ? { facingMode: 'environment' }
-            : { facingMode: 'user' };
+        // Configuração de câmera com alta resolução e foco contínuo se suportado
+        const cameraConfig = {
+          facingMode: 'environment',
+          focusMode: 'continuous',
+          width: { min: 640, ideal: 1280, max: 1920 },
+          height: { min: 480, ideal: 720, max: 1080 },
+        };
 
         await html5QrCode.start(
           cameraConfig,
           {
-            fps: 15,
+            fps: 10,
             qrbox: (viewfinderWidth, viewfinderHeight) => {
               // Caixa retangular ampla otimizada para códigos de barra 1D (EAN-13, CODE-128)
-              const width = Math.min(viewfinderWidth * 0.85, 320);
-              const height = Math.min(viewfinderHeight * 0.45, 160);
-              return { width: Math.floor(width), height: Math.floor(height) };
+              const width = Math.min(Math.floor(viewfinderWidth * 0.85), 350);
+              const height = Math.min(Math.floor(viewfinderHeight * 0.4), 160);
+              return { width, height };
             },
-            aspectRatio: 1.0,
-            disableFlip: false,
+            disableFlip: true,
           },
           (decodedText) => {
             const clean = decodedText.trim();
@@ -185,9 +185,8 @@ export function BarcodeScannerModal({
         </div>
 
         {/* Camera Container */}
-        <div className="relative w-full aspect-square bg-neutral-900 rounded-2xl overflow-hidden flex flex-col items-center justify-center border border-border-neutral">
-          <div id="barcode-scanner-viewport" className="w-full h-full [&_video]:object-cover" />
-
+        <div className="relative w-full aspect-[4/3] bg-neutral-900 rounded-2xl overflow-hidden flex flex-col items-center justify-center border border-border-neutral">
+          <div id="barcode-scanner-viewport" className="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-contain" />
           {isStarting && (
             <div className="absolute inset-0 bg-neutral-900 flex flex-col items-center justify-center text-white gap-3 p-4 z-10">
               <RefreshCw className="w-8 h-8 animate-spin text-brand-500" />
