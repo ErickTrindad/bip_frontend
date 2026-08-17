@@ -66,7 +66,7 @@ export function AuthPage() {
 
   const handleModalContinue = () => {
     setIsModalOpen(false);
-    navigate("/");
+    navigate("/products");
   };
 
   return (

@@ -35,7 +35,14 @@ export function HomePage() {
                 <span className="font-bold">{tenant.name} ({tenant.category})</span>
               </div>
             )}
-            <div className="pt-2">
+            <div className="pt-2 flex flex-col gap-2">
+              <Link
+                to="/products"
+                className="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-sm cursor-pointer"
+              >
+                <Store className="w-4 h-4" />
+                <span>Acessar Painel de Produtos</span>
+              </Link>
               <button
                 onClick={logout}
                 className="w-full py-2 bg-card hover:bg-neutral-100 border border-border-neutral rounded-xl font-bold text-text-primary flex items-center justify-center gap-2 transition-colors cursor-pointer"
