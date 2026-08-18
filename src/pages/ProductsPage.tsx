@@ -44,12 +44,12 @@ export function ProductsPage() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   // Modals state
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [formInitialBarcode, setFormInitialBarcode] = useState<string>('');
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isPosModalOpen, setIsPosModalOpen] = useState(false);
   const [isScannerModalOpen, setIsScannerModalOpen] = useState(false);
   const [scannerTarget, setScannerTarget] = useState<'search' | 'create' | 'pos'>('search');
   const [posScannedBarcode, setPosScannedBarcode] = useState<string | null>(null);
-
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [productToEdit, setProductToEdit] = useState<Product | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -209,6 +209,7 @@ export function ProductsPage() {
     } else if (scannerTarget === 'create') {
       setProductToEdit(null);
       setSelectedProduct(null);
+      setFormInitialBarcode(code);
       setIsFormModalOpen(true);
     } else if (scannerTarget === 'pos') {
       setPosScannedBarcode(code);
@@ -369,16 +370,20 @@ export function ProductsPage() {
           <div className="p-5 bg-card border border-border-neutral rounded-3xl shadow-xs flex flex-col justify-between gap-3">
             <span className="text-xs font-bold text-text-muted">Ações Rápidas</span>
             <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => {
-                  setProductToEdit(null);
-                  setIsFormModalOpen(true);
-                }}
-                className="py-2.5 px-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors shadow-sm cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Novo SKU</span>
-              </button>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => {
+                    setProductToEdit(null);
+                    setFormInitialBarcode('');
+                    setIsFormModalOpen(true);
+                  }}
+                  className="flex-1 py-2.5 px-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 transition-colors shadow-sm cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Novo SKU</span>
+                </button>
+                
+              </div>
               <button
                 onClick={() => setIsPosModalOpen(true)}
                 className="py-2.5 px-3 bg-text-primary hover:bg-neutral-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors shadow-sm cursor-pointer"
@@ -389,7 +394,6 @@ export function ProductsPage() {
             </div>
           </div>
         </div>
-
         {/* Tab Navigation */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-border-neutral pb-3">
           <div className="flex gap-2">
@@ -738,9 +742,15 @@ export function ProductsPage() {
         onClose={() => {
           setIsFormModalOpen(false);
           setProductToEdit(null);
+          setFormInitialBarcode('');
         }}
         onSuccess={handleProductCreatedOrUpdated}
         productToEdit={productToEdit}
+        initialBarcode={formInitialBarcode}
+        onOpenScanner={() => {
+          setScannerTarget('create');
+          setIsScannerModalOpen(true);
+        }}
       />
 
       <TransferStockModal

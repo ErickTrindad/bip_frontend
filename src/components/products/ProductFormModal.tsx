@@ -8,6 +8,7 @@ import {
   Layers,
   AlertTriangle,
   Info,
+  Camera,
 } from 'lucide-react';
 import type { Product, CreateProductPayload, UpdateProductPayload } from '../../types/product';
 import { productService } from '../../services/productService';
@@ -18,6 +19,7 @@ interface ProductFormModalProps {
   onSuccess: (product: Product) => void;
   productToEdit?: Product | null;
   initialBarcode?: string;
+  onOpenScanner?: () => void;
 }
 
 const COMMON_CATEGORIES = [
@@ -39,6 +41,7 @@ export function ProductFormModal({
   onSuccess,
   productToEdit,
   initialBarcode,
+  onOpenScanner,
 }: ProductFormModalProps) {
   const [barcode, setBarcode] = useState('');
   const [name, setName] = useState('');
@@ -241,15 +244,26 @@ export function ProductFormModal({
                 <label className="text-[11px] font-bold text-text-muted">
                   Código de Barras (EAN/GTIN) <span className="text-status-danger">*</span>
                 </label>
-                <div className="flex gap-2">
+                <div className="flex gap-1.5 sm:gap-2">
                   <input
                     type="text"
                     required
                     value={barcode}
                     onChange={(e) => setBarcode(e.target.value)}
                     placeholder="Ex: 7891000100103"
-                    className="flex-1 px-3 py-2 bg-canvas border border-border-neutral rounded-xl text-text-primary text-xs focus:outline-none focus:border-brand-500 font-mono"
+                    className="flex-1 min-w-0 px-3 py-2 bg-canvas border border-border-neutral rounded-xl text-text-primary text-xs focus:outline-none focus:border-brand-500 font-mono"
                   />
+                  {onOpenScanner && (
+                    <button
+                      type="button"
+                      onClick={onOpenScanner}
+                      title="Escanear com a Câmera"
+                      className="px-3 py-2 bg-neutral-100 hover:bg-neutral-200 border border-border-neutral text-text-primary rounded-xl font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-brand-600" />
+                      <span className="hidden sm:inline text-xs">Escanear</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={handleLookupOpenFoodFacts}
@@ -262,12 +276,10 @@ export function ProductFormModal({
                     ) : (
                       <Sparkles className="w-3.5 h-3.5" />
                     )}
-                    <span className="hidden sm:inline">Autopreencher</span>
+                    <span className="hidden sm:inline text-xs">Autopreencher</span>
                   </button>
                 </div>
               </div>
-
-              {/* Preço Unitário */}
               <div className="sm:col-span-6 space-y-1">
                 <label className="text-[11px] font-bold text-text-muted">
                   Preço de Venda (R$)
