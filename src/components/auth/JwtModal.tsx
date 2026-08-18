@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, CheckCircle2, Copy, ArrowRight, ShieldCheck } from "lucide-react";
 import type { AuthResponse } from "../../types/auth";
 
@@ -17,8 +17,18 @@ export function JwtModal({
 }: JwtModalProps) {
   const [copied, setCopied] = useState(false);
 
-  if (!isOpen || !authData) return null;
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
 
+  if (!isOpen || !authData) return null;
   const jwtPayload = {
     sub: authData.user.id,
     user_email: authData.user.email,

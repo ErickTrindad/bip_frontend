@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/useAuth';
 import { productService } from '../services/productService';
+import { ApiError } from '../services/api';
 import type { Product, CriticalProduct } from '../types/product';
 import { ProductFormModal } from '../components/products/ProductFormModal';
 import { TransferStockModal } from '../components/products/TransferStockModal';
@@ -210,13 +211,23 @@ export function ProductsPage() {
         text: 'Produto excluído com sucesso!',
       });
       setDeleteConfirmId(null);
+      fetchProducts();
+      fetchCriticalProducts();
+      setTimeout(() => setFeedbackMessage(null), 4000);
     } catch (err: unknown) {
       console.error('Erro ao excluir produto:', err);
+      setDeleteConfirmId(null);
+      const errorMsg =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+          ? err.message
+          : 'Não foi possível excluir o produto.';
       setFeedbackMessage({
         type: 'error',
-        text: 'Não foi possível excluir o produto.',
+        text: errorMsg,
       });
-      setTimeout(() => setFeedbackMessage(null), 4000);
+      setTimeout(() => setFeedbackMessage(null), 5000);
     }
   };
   const handleScanComplete = (code: string) => {

@@ -1,4 +1,4 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, type SyntheticEvent } from 'react';
 import {
   X,
   ShoppingCart,
@@ -50,8 +50,18 @@ export function PosSaleModal({
     }
   }, [isOpen, scannedBarcode, onBarcodeConsumed]);
 
-  const [successResult, setSuccessResult] = useState<PosSaleResponse | null>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleResetAndClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
 
+  const [successResult, setSuccessResult] = useState<PosSaleResponse | null>(null);
   const handleAddItemByBarcode = (code: string, qty: number = 1) => {
     setErrorMessage(null);
     const trimmed = code.trim();
@@ -109,7 +119,7 @@ export function PosSaleModal({
   );
   const totalItemsCount = items.reduce((acc, item) => acc + item.quantity, 0);
 
-  const handleSubmitSale = async (e: FormEvent) => {
+  const handleSubmitSale = async (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorMessage(null);
 

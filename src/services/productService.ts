@@ -58,6 +58,7 @@ export const productService = {
   async delete(id: string): Promise<{ message: string }> {
     return request<{ message: string }>(`/products/${id}`, {
       method: 'DELETE',
+      body: JSON.stringify({}),
     });
   },
 

@@ -95,15 +95,24 @@ export function BarcodeScannerModal({
       return;
     }
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        stopMediaStream();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
     const timer = setTimeout(() => {
       startCamera();
     }, 200);
 
     return () => {
+      window.removeEventListener('keydown', handleKeyDown);
       clearTimeout(timer);
       stopMediaStream();
     };
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
   // Processa uma imagem (ImageBitmap / Blob / File) passando por BarcodeDetector Nativo + ZXing com multi-crops
   const processImageSource = async (source: Blob | File | ImageBitmap) => {
@@ -313,7 +322,7 @@ export function BarcodeScannerModal({
     }
   };
 
-  const handleManualSubmit = (e: React.FormEvent) => {
+  const handleManualSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (manualCode.trim()) {
       onScan(manualCode.trim());
