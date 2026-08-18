@@ -240,7 +240,7 @@ export function ProductFormModal({
 
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
               {/* Código de barras + Autopreenchimento Open Food Facts */}
-              <div className="sm:col-span-6 space-y-1">
+              <div className="sm:col-span-8 space-y-1">
                 <label className="text-[11px] font-bold text-text-muted">
                   Código de Barras (EAN/GTIN) <span className="text-status-danger">*</span>
                 </label>
@@ -280,17 +280,22 @@ export function ProductFormModal({
                   </button>
                 </div>
               </div>
-              <div className="sm:col-span-6 space-y-1">
+              <div className="sm:col-span-4 space-y-1">
                 <label className="text-[11px] font-bold text-text-muted">
-                  Preço de Venda (R$)
+                  Preço de Venda
                 </label>
-                <input
-                  type="text"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  placeholder="0,00"
-                  className="w-full px-3 py-2 bg-canvas border border-border-neutral rounded-xl text-text-primary text-xs focus:outline-none focus:border-brand-500 font-mono"
-                />
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-xs font-bold font-mono pointer-events-none">
+                    R$
+                  </span>
+                  <input
+                    type="text"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    placeholder="0,00"
+                    className="w-full pl-9 pr-3 py-2 bg-canvas border border-border-neutral rounded-xl text-text-primary text-xs focus:outline-none focus:border-brand-500 font-mono"
+                  />
+                </div>
               </div>
 
               {/* Nome */}

@@ -35,6 +35,7 @@ export function ProductsPage() {
 
   const [activeTab, setActiveTab] = useState<ViewTab>('all');
   const [products, setProducts] = useState<Product[]>([]);
+  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [criticalProducts, setCriticalProducts] = useState<CriticalProduct[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState('');
@@ -87,8 +88,14 @@ export function ProductsPage() {
         setProducts(response.products);
         setTotalCount(response.total);
 
-        // Sync with IndexedDB
+        // Atualiza a lista de categorias disponíveis acumulando as categorias encontradas
         if (response.products.length > 0) {
+          const newCats = response.products
+            .map((p) => p.category)
+            .filter(Boolean) as string[];
+          setAvailableCategories((prev) => Array.from(new Set([...prev, ...newCats])));
+
+          // Sync with IndexedDB
           await db.products.bulkPut(
             response.products.map((p) => ({ ...p, synced: true }))
           ).catch((e) => console.warn('Dexie save error:', e));
@@ -96,6 +103,11 @@ export function ProductsPage() {
       } else {
         // Offline load from IndexedDB
         let offlineList = await db.products.toArray();
+        const offlineCats = offlineList
+          .map((p) => p.category)
+          .filter(Boolean) as string[];
+        setAvailableCategories((prev) => Array.from(new Set([...prev, ...offlineCats])));
+
         if (searchTerm) {
           const lower = searchTerm.toLowerCase();
           offlineList = offlineList.filter(
@@ -113,6 +125,10 @@ export function ProductsPage() {
     } catch (err) {
       console.warn('Erro ao carregar produtos do servidor, tentando offline...', err);
       const offlineList = await db.products.toArray();
+      const offlineCats = offlineList
+        .map((p) => p.category)
+        .filter(Boolean) as string[];
+      setAvailableCategories((prev) => Array.from(new Set([...prev, ...offlineCats])));
       setProducts(offlineList);
       setTotalCount(offlineList.length);
     } finally {
@@ -215,11 +231,8 @@ export function ProductsPage() {
       setPosScannedBarcode(code);
     }
   };
-
-  // Categories list
-  const categories = Array.from(
-    new Set(products.map((p) => p.category).filter(Boolean) as string[])
-  );
+  // Lista acumulada de categorias
+  const categories = availableCategories.slice().sort((a, b) => a.localeCompare(b));
 
   return (
     <div className="min-h-screen bg-canvas text-text-primary flex flex-col antialiased">
@@ -243,7 +256,6 @@ export function ProductsPage() {
             </p>
           </div>
         </div>
-
         {/* Right Header Status / User Info */}
         <div className="flex items-center gap-2 sm:gap-4 text-xs">
           {/* Online/Offline Badge */}

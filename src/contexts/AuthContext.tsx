@@ -30,6 +30,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [session]);
 
+  // Escuta 401 de requisições de API quando online para deslogar e limpar token inválido
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      if (navigator.onLine) {
+        logout();
+      }
+    };
+
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => {
+      window.removeEventListener('auth:unauthorized', handleUnauthorized);
+    };
+  }, []);
   const setAuthData = (response: AuthResponse) => {
     setUser(response.user);
     setTenant(response.tenant);
