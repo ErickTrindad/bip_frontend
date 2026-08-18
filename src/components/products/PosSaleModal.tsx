@@ -163,7 +163,7 @@ export function PosSaleModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-sm animate-fade-in overflow-y-auto">
-      <div className="w-full max-w-xl bg-card border border-border-neutral rounded-3xl p-5 sm:p-7 shadow-2xl relative my-auto max-h-[90vh] flex flex-col">
+      <div className="w-full max-w-xl bg-card border border-border-neutral rounded-3xl p-5 sm:p-7 shadow-2xl relative my-auto max-h-90vh flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-border-neutral mb-4 shrink-0">
           <div className="flex items-center gap-2 text-brand-600 font-bold">

@@ -167,7 +167,7 @@ export function ForgotPasswordForm({
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full mt-4 py-3.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-70 text-white font-bold rounded-xl text-sm transition-all shadow-md hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full mt-4 py-3.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-70 text-white font-bold rounded-xl text-sm transition-all shadow-md hover:shadow-lg active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
           >
             {isLoading ? (
               <>
@@ -250,7 +250,7 @@ export function ForgotPasswordForm({
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full mt-2 py-3.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-70 text-white font-bold rounded-xl text-sm transition-all shadow-md hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full mt-2 py-3.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-70 text-white font-bold rounded-xl text-sm transition-all shadow-md hover:shadow-lg active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
           >
             {isLoading ? (
               <>

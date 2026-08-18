@@ -135,7 +135,7 @@ export function AuthPage() {
           </div>
 
           {/* Right Forms Area */}
-          <div className="col-span-1 md:col-span-7 bg-card p-6 sm:p-10 flex flex-col justify-between overflow-y-auto max-h-[90vh] sm:max-h-none">
+          <div className="col-span-1 md:col-span-7 bg-card p-6 sm:p-10 flex flex-col justify-between overflow-y-auto max-h-90vh sm:max-h-none">
             <div>
               {/* Tab Selector (Oculto na tela de recuperação de senha) */}
               {activeTab !== "forgot" && (

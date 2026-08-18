@@ -335,7 +335,7 @@ export function BarcodeScannerModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-md bg-card border border-border-neutral rounded-3xl p-5 shadow-2xl flex flex-col relative overflow-hidden max-h-[90vh]">
+      <div className="w-full max-w-md bg-card border border-border-neutral rounded-3xl p-5 shadow-2xl flex flex-col relative overflow-hidden max-h-90vh">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-border-neutral mb-3">
           <div className="flex items-center gap-2 text-brand-600 font-bold">
@@ -355,7 +355,7 @@ export function BarcodeScannerModal({
         </div>
 
         {/* Camera / Viewfinder Container */}
-        <div className="relative w-full aspect-[4/3] bg-neutral-900 rounded-2xl overflow-hidden flex flex-col items-center justify-center border border-border-neutral shadow-inner">
+        <div className="relative w-full aspect-4/3 bg-neutral-900 rounded-2xl overflow-hidden flex flex-col items-center justify-center border border-border-neutral shadow-inner">
           <video
             ref={videoRef}
             playsInline
@@ -367,7 +367,7 @@ export function BarcodeScannerModal({
           {/* Overlay Mira / Guia de Enquadramento */}
           {!isStarting && !error && (
             <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
-              <div className="w-[85%] h-[38%] border-2 border-brand-500/80 bg-brand-500/5 rounded-xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]">
+              <div className="w-85% h-38% border-2 border-brand-500/80 bg-brand-500/5 rounded-xl relative shadow-2xl">
                 {/* Cantoneiras estilizadas */}
                 <div className="absolute -top-1 -left-1 w-4 h-4 border-t-4 border-l-4 border-brand-400 rounded-tl" />
                 <div className="absolute -top-1 -right-1 w-4 h-4 border-t-4 border-r-4 border-brand-400 rounded-tr" />
@@ -375,9 +375,9 @@ export function BarcodeScannerModal({
                 <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-4 border-r-4 border-brand-400 rounded-br" />
                 
                 {/* Linha vermelha guia de mira */}
-                <div className="absolute top-1/2 left-4 right-4 h-0.5 bg-red-500/75 shadow-[0_0_8px_rgba(239,68,68,0.8)] -translate-y-1/2" />
+                <div className="absolute top-1/2 left-4 right-4 h-0.5 bg-red-500/75 shadow-sm -translate-y-1/2" />
               </div>
-              <span className="mt-3 text-[11px] font-medium text-white/90 bg-black/60 px-3 py-1 rounded-full backdrop-blur-sm">
+              <span className="mt-3 text-xs font-medium text-white/90 bg-black/60 px-3 py-1 rounded-full backdrop-blur-sm">
                 Posicione o código no retângulo e clique em Escanear
               </span>
             </div>
@@ -410,7 +410,7 @@ export function BarcodeScannerModal({
               ) : (
                 <AlertCircle className="w-10 h-10 text-status-danger" />
               )}
-              <p className="text-xs font-semibold text-neutral-200 leading-relaxed max-w-[280px]">
+              <p className="text-xs font-semibold text-neutral-200 leading-relaxed max-w-xs">
                 {error}
               </p>
               <button
@@ -422,7 +422,7 @@ export function BarcodeScannerModal({
                 {isPermissionError ? 'Solicitar / Autorizar Câmera' : 'Tentar Novamente'}
               </button>
               {isPermissionError && (
-                <span className="text-[10px] text-neutral-400">
+                <span className="text-xs text-neutral-400">
                   Dica: Se o navegador não exibir o pop-up, clique no ícone de cadeado/permissões ao lado da URL.
                 </span>
               )}
@@ -436,7 +436,7 @@ export function BarcodeScannerModal({
             type="button"
             onClick={handleCaptureAndScan}
             disabled={isCapturing || isStarting}
-            className="w-full py-3 px-4 bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-brand-600/20 active:scale-[0.99] disabled:opacity-50 cursor-pointer"
+            className="w-full py-3 px-4 bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-brand-600/20 active:scale-98 disabled:opacity-50 cursor-pointer"
           >
             {isCapturing ? (
               <>
@@ -491,7 +491,7 @@ export function BarcodeScannerModal({
             </button>
           </form>
 
-          <p className="text-[10.5px] text-text-muted text-center leading-tight">
+          <p className="text-xs text-text-muted text-center leading-tight">
             Compatível com EAN-13, EAN-8, CODE-128, CODE-39, UPC e QR Code.
           </p>
         </div>

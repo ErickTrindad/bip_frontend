@@ -195,7 +195,7 @@ export function ProductFormModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-sm overflow-y-auto animate-fade-in">
-      <div className="w-full max-w-2xl bg-card border border-border-neutral rounded-3xl p-5 sm:p-8 shadow-2xl relative my-auto max-h-[90vh] flex flex-col">
+      <div className="w-full max-w-2xl bg-card border border-border-neutral rounded-3xl p-5 sm:p-8 shadow-2xl relative my-auto max-h-90vh flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-border-neutral mb-5 shrink-0">
           <div>
@@ -243,7 +243,7 @@ export function ProductFormModal({
 
           {/* Section 1: Informações Básicas */}
           <div className="space-y-3">
-            <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
               <Package className="w-3.5 h-3.5" />
               Identificação do Produto
             </h3>
@@ -345,7 +345,7 @@ export function ProductFormModal({
 
           {/* Section 2: Estoques Duplos (Depósito vs Gôndola) */}
           <div className="space-y-3 pt-2">
-            <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5" />
               Gestão de Estoque Duplo
             </h3>
