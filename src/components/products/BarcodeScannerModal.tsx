@@ -57,35 +57,10 @@ export function BarcodeScannerModal({
   };
 
   const startScanner = async () => {
-    await cleanupScanner();
     setError(null);
     setIsPermissionError(false);
     setIsStarting(true);
-
     try {
-      // Tentar solicitar permissão explicitamente via getUserMedia caso o navegador suporte
-      if (navigator?.mediaDevices?.getUserMedia) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment' },
-          });
-          // Para as tracks temporárias para liberar a câmera para o html5-qrcode
-          stream.getTracks().forEach((track) => track.stop());
-        } catch (mediaErr: unknown) {
-          const errObj = mediaErr as { name?: string; message?: string } | undefined;
-          if (
-            errObj?.name === 'NotAllowedError' ||
-            errObj?.name === 'PermissionDeniedError'
-          ) {
-            setIsPermissionError(true);
-            setError(
-              'Acesso à câmera bloqueado. Clique no botão abaixo para tentar autorizar ou habilite a câmera nas configurações do navegador.'
-            );
-            return;
-          }
-        }
-      }
-
       const scannerId = 'barcode-scanner-viewport';
       const html5QrCode = new Html5Qrcode(scannerId, {
         formatsToSupport: SUPPORTED_BARCODE_FORMATS,
@@ -96,6 +71,7 @@ export function BarcodeScannerModal({
       });
       scannerRef.current = html5QrCode;
 
+      // Configuração de câmera traseira (html5-qrcode aceita exatamente 1 chave: facingMode ou deviceId)
       const cameraConfig = { facingMode: 'environment' };
 
       await html5QrCode.start(
@@ -103,8 +79,8 @@ export function BarcodeScannerModal({
         {
           fps: 10,
           qrbox: (viewfinderWidth, viewfinderHeight) => {
-            const width = Math.min(Math.floor(viewfinderWidth * 0.85), 350);
-            const height = Math.min(Math.floor(viewfinderHeight * 0.4), 160);
+            const width = Math.min(Math.floor(viewfinderWidth * 0.9), 360);
+            const height = Math.min(Math.floor(viewfinderHeight * 0.35), 150);
             return { width, height };
           },
           disableFlip: false,
@@ -124,18 +100,14 @@ export function BarcodeScannerModal({
       isRunningRef.current = true;
     } catch (err: unknown) {
       console.error('Erro ao acessar a câmera:', err);
-      const errObj = err as { name?: string; message?: string } | undefined;
-      const isDenied =
-        errObj?.name === 'NotAllowedError' ||
-        errObj?.name === 'PermissionDeniedError' ||
-        (typeof err === 'string' && err.toLowerCase().includes('permission')) ||
-        (errObj?.message && errObj.message.toLowerCase().includes('permission'));
-
-      setIsPermissionError(Boolean(isDenied));
+      const isNotAllowed =
+        err instanceof Error &&
+        (err.name === 'NotAllowedError' ||
+          err.name === 'PermissionDeniedError' ||
+          err.message.toLowerCase().includes('permission'));
+      setIsPermissionError(Boolean(isNotAllowed));
       setError(
-        isDenied
-          ? 'Acesso à câmera bloqueado. Clique no botão abaixo para tentar autorizar ou altere nas configurações de permissão do navegador.'
-          : 'Não foi possível inicializar a câmera. Você pode tentar novamente, enviar uma foto ou digitar o código.'
+        'Não foi possível inicializar a câmera (permissão negada ou dispositivo sem suporte). Você pode fazer upload de uma foto ou digitar o código.'
       );
     } finally {
       setIsStarting(false);
