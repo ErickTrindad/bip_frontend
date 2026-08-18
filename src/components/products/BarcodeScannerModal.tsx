@@ -57,62 +57,62 @@ export function BarcodeScannerModal({
   };
 
   const startScanner = async () => {
-    setError(null);
-    setIsPermissionError(false);
-    setIsStarting(true);
-    try {
-      const scannerId = 'barcode-scanner-viewport';
-      const html5QrCode = new Html5Qrcode(scannerId, {
-        formatsToSupport: SUPPORTED_BARCODE_FORMATS,
-        verbose: false,
-        experimentalFeatures: {
-          useBarCodeDetectorIfSupported: true,
-        },
-      });
-      scannerRef.current = html5QrCode;
+  setError(null);
+  setIsPermissionError(false);
+  setIsStarting(true);
+  try {
+    const scannerId = 'barcode-scanner-viewport';
+    const html5QrCode = new Html5Qrcode(scannerId, {
+      formatsToSupport: SUPPORTED_BARCODE_FORMATS,
+      verbose: false,
+      experimentalFeatures: {
+        useBarCodeDetectorIfSupported: true,
+      },
+    });
+    scannerRef.current = html5QrCode;
 
-      // Configuração de câmera traseira (html5-qrcode aceita exatamente 1 chave: facingMode ou deviceId)
-      const cameraConfig = { facingMode: 'environment' };
-
-      await html5QrCode.start(
-        cameraConfig,
-        {
-          fps: 10,
-          qrbox: (viewfinderWidth, viewfinderHeight) => {
-            const width = Math.min(Math.floor(viewfinderWidth * 0.9), 360);
-            const height = Math.min(Math.floor(viewfinderHeight * 0.35), 150);
-            return { width, height };
-          },
-          disableFlip: false,
+    await html5QrCode.start(
+      { facingMode: 'environment' },
+      {
+        fps: 10,
+        // Remova a restrição de qrbox para processar todo o campo de visão
+        qrbox: undefined,
+        // Força resolução nítida e foco automático contínuo
+        videoConstraints: {
+          facingMode: { ideal: 'environment' },
+          width: { min: 1280, ideal: 1920 },
+          height: { min: 720, ideal: 1080 },
+          // @ts-ignore - aciona o foco contínuo em navegadores compatíveis
+          advanced: [{ focusMode: 'continuous' }],
         },
-        (decodedText) => {
-          const clean = decodedText.trim();
-          if (clean) {
-            onScan(clean);
-            cleanupScanner();
-            onClose();
-          }
-        },
-        () => {
-          // Callback silencioso para frames sem código
+        disableFlip: false,
+      },
+      (decodedText) => {
+        const clean = decodedText.trim();
+        if (clean) {
+          onScan(clean);
+          cleanupScanner();
+          onClose();
         }
-      );
-      isRunningRef.current = true;
-    } catch (err: unknown) {
-      console.error('Erro ao acessar a câmera:', err);
-      const isNotAllowed =
-        err instanceof Error &&
-        (err.name === 'NotAllowedError' ||
-          err.name === 'PermissionDeniedError' ||
-          err.message.toLowerCase().includes('permission'));
-      setIsPermissionError(Boolean(isNotAllowed));
-      setError(
-        'Não foi possível inicializar a câmera (permissão negada ou dispositivo sem suporte). Você pode fazer upload de uma foto ou digitar o código.'
-      );
-    } finally {
-      setIsStarting(false);
-    }
-  };
+      },
+      () => {}
+    );
+    isRunningRef.current = true;
+  } catch (err: unknown) {
+    console.error('Erro ao acessar a câmera:', err);
+    const isNotAllowed =
+      err instanceof Error &&
+      (err.name === 'NotAllowedError' ||
+        err.name === 'PermissionDeniedError' ||
+        err.message.toLowerCase().includes('permission'));
+    setIsPermissionError(Boolean(isNotAllowed));
+    setError(
+      'Não foi possível inicializar a câmera (permissão negada ou dispositivo sem suporte). Você pode fazer upload de uma foto ou digitar o código.'
+    );
+  } finally {
+    setIsStarting(false);
+  }
+};
 
   useEffect(() => {
     if (!isOpen) {
