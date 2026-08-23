@@ -57,16 +57,25 @@ export function ActionReviewModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeItemIndex, setActiveItemIndex] = useState(0);
 
-  // Normaliza lista de produtos de forma resiliente a multi-produtos, varredura geral e comandos compostos
+  // Normaliza lista de produtos garantindo que NUNCA crie produtos ficticios caso actions seja vazio
   const initialItems = useMemo<EditableProductAction[]>(() => {
     const list: EditableProductAction[] = [];
     const mainProd = voiceResult.matchedProduct;
+
+    // Se o intent for UNKNOWN ou REPLENISH_ALL_CRITICAL sem actions válidas, retorna lista vazia
+    if (voiceResult.intent === 'UNKNOWN') {
+      return [];
+    }
+
     if (voiceResult.actions && voiceResult.actions.length > 0) {
       voiceResult.actions.forEach((act, idx) => {
         const itemMatched = act.matchedProduct;
-        const prodName = act.productQuery || itemMatched?.name || (idx === 0 && mainProd?.name) || 'Produto';
-        const isMatched = !!itemMatched || (idx === 0 && !!mainProd && (prodName.toLowerCase() === mainProd.name.toLowerCase() || act.productQuery === mainProd.barcode));
+        const prodName = act.productQuery || itemMatched?.name || (idx === 0 && mainProd?.name);
         
+        // Se não houver nome de produto válido nem item encontrado, não cria item fictício
+        if (!prodName && !itemMatched && !mainProd) return;
+
+        const isMatched = !!itemMatched || (idx === 0 && !!mainProd && (prodName ? prodName.toLowerCase() === mainProd.name.toLowerCase() : false || act.productQuery === mainProd.barcode));
         const effectiveProd = itemMatched || (isMatched ? mainProd : null);
         const curDepot = effectiveProd ? effectiveProd.depotQty : 0;
         const curShelf = effectiveProd ? effectiveProd.shelfQty : 0;
@@ -76,7 +85,7 @@ export function ActionReviewModal({
           id: `act-${idx}`,
           productId: effectiveProd?.id,
           action: act.action,
-          productName: effectiveProd?.name || prodName,
+          productName: effectiveProd?.name || prodName || 'Produto',
           barcode: effectiveProd?.barcode,
           price: act.price != null ? Number(act.price) : curPrice,
           quantity: act.quantity != null ? Number(act.quantity) : (act.depotQty || act.shelfQty ? (act.depotQty || 0) + (act.shelfQty || 0) : undefined),
@@ -90,28 +99,32 @@ export function ActionReviewModal({
           isApplied: act.executed || voiceResult.executed,
         });
       });
-    } else if (voiceResult.intent !== 'REPLENISH_ALL_CRITICAL') {
-      const prodName = voiceResult.extractedData.productQuery || mainProd?.name || 'Produto';
-      list.push({
-        id: 'act-0',
-        productId: mainProd?.id,
-        action: voiceResult.intent !== 'UNKNOWN' && voiceResult.intent !== 'COMPOUND_ACTION' ? voiceResult.intent : 'STOCK_ENTRY',
-        productName: mainProd?.name || prodName,
-        barcode: mainProd?.barcode || voiceResult.extractedData.barcode,
-        price: voiceResult.extractedData.newPrice ?? voiceResult.extractedData.price ?? (mainProd?.price != null ? Number(mainProd.price) : null),
-        quantity: voiceResult.extractedData.quantity,
-        from: voiceResult.extractedData.from || 'shelf',
-        to: voiceResult.extractedData.to || 'depot',
-        destination: voiceResult.extractedData.destination || 'depot',
-        currentDepotQty: mainProd ? mainProd.depotQty : 0,
-        currentShelfQty: mainProd ? mainProd.shelfQty : 0,
-        currentPrice: mainProd?.price != null ? Number(mainProd.price) : null,
-        isExistingProduct: !!mainProd,
-        isApplied: voiceResult.executed,
-      });
+    } else if (voiceResult.intent !== 'REPLENISH_ALL_CRITICAL' && voiceResult.intent !== 'COMPOUND_ACTION') {
+      // Apenas cria item se houver um produto real identificado ou termo de busca específico
+      const prodName = voiceResult.extractedData.productQuery || mainProd?.name;
+      if (prodName || mainProd) {
+        list.push({
+          id: 'act-0',
+          productId: mainProd?.id,
+          action: voiceResult.intent,
+          productName: mainProd?.name || prodName || '',
+          barcode: mainProd?.barcode || voiceResult.extractedData.barcode,
+          price: voiceResult.extractedData.newPrice ?? voiceResult.extractedData.price ?? (mainProd?.price != null ? Number(mainProd.price) : null),
+          quantity: voiceResult.extractedData.quantity,
+          from: voiceResult.extractedData.from || 'shelf',
+          to: voiceResult.extractedData.to || 'depot',
+          destination: voiceResult.extractedData.destination || 'depot',
+          currentDepotQty: mainProd ? mainProd.depotQty : 0,
+          currentShelfQty: mainProd ? mainProd.shelfQty : 0,
+          currentPrice: mainProd?.price != null ? Number(mainProd.price) : null,
+          isExistingProduct: !!mainProd,
+          isApplied: voiceResult.executed,
+        });
+      }
     }
     return list;
   }, [voiceResult]);
+
   const [editableItems, setEditableItems] = useState<EditableProductAction[]>(initialItems);
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
 
@@ -120,7 +133,6 @@ export function ActionReviewModal({
     setEditableItems(initialItems);
     setActiveItemIndex(0);
   }, [initialItems, isOpen]);
-
   // Busca em segundo plano o produto caso não tenha sido identificado pelo id
   useEffect(() => {
     if (!isOpen) return;
@@ -382,12 +394,15 @@ export function ActionReviewModal({
             <div className="p-4 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-200">
               <CheckCircle2 className="w-10 h-10" />
             </div>
-            <div className="max-w-md space-y-1">
+            <div className="max-w-md space-y-1.5">
               <h4 className="text-base font-extrabold text-text-primary">
-                Todas as Gôndolas estão Abastecidas!
+                {voiceResult.intent === 'REPLENISH_ALL_CRITICAL'
+                  ? 'Gôndolas 100% Abastecidas'
+                  : 'Nenhuma Ação Pendente'}
               </h4>
-              <p className="text-xs text-text-muted">
-                A varredura no estoque não encontrou produtos com saldo crítico ou não há saldo disponível no depósito para transferência no momento.
+              <p className="text-xs text-text-muted leading-relaxed">
+                {voiceResult.explanation ||
+                  'A varredura no estoque não encontrou produtos que necessitam de reposição no momento.'}
               </p>
             </div>
           </div>
@@ -461,9 +476,15 @@ export function ActionReviewModal({
                   </span>
                 )}
                 {currentItem.action === 'TRANSFER_STOCK' && (
-                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
-                    <Store className="w-3.5 h-3.5" /> Reposição de Gôndola (Depósito ➔ Gôndola)
-                  </span>
+                  currentItem.from === 'shelf' && currentItem.to === 'depot' ? (
+                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200 flex items-center gap-1">
+                      <Store className="w-3.5 h-3.5" /> Gôndola ➔ Depósito (Recolhimento)
+                    </span>
+                  ) : (
+                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
+                      <Store className="w-3.5 h-3.5" /> Depósito ➔ Gôndola (Reposição)
+                    </span>
+                  )
                 )}
                 {currentItem.action === 'UPDATE_PRODUCT' && (
                   <span className="px-3 py-1 rounded-full text-xs font-bold bg-violet-50 text-violet-700 border border-violet-200 flex items-center gap-1">

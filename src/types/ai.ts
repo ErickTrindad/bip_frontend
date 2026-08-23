@@ -102,8 +102,9 @@ export interface VoiceCommandResponse {
     barcode?: string;
     [key: string]: unknown;
   };
-  actions?: VoiceActionItem[];
+  actions: VoiceActionItem[];
   matchedProduct?: MatchedProduct | null;
+  matchedProducts?: MatchedProduct[];
   explanation: string;
   executed: boolean;
   executionResult?: unknown;
