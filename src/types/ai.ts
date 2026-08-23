@@ -47,12 +47,12 @@ export type VoiceIntent =
   | 'STOCK_ENTRY'
   | 'UPDATE_PRODUCT'
   | 'TRANSFER_STOCK'
+  | 'REPLENISH_ALL_CRITICAL'
   | 'POS_SALE'
   | 'CHECK_STOCK'
   | 'REGISTER_PRODUCT'
   | 'COMPOUND_ACTION'
   | 'UNKNOWN';
-
 export interface MatchedProduct {
   id: string;
   name: string;

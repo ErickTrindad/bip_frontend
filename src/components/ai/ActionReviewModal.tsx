@@ -57,11 +57,10 @@ export function ActionReviewModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeItemIndex, setActiveItemIndex] = useState(0);
 
-  // Normaliza lista de produtos de forma resiliente a multi-produtos e comandos compostos
+  // Normaliza lista de produtos de forma resiliente a multi-produtos, varredura geral e comandos compostos
   const initialItems = useMemo<EditableProductAction[]>(() => {
     const list: EditableProductAction[] = [];
     const mainProd = voiceResult.matchedProduct;
-
     if (voiceResult.actions && voiceResult.actions.length > 0) {
       voiceResult.actions.forEach((act, idx) => {
         const itemMatched = act.matchedProduct;
@@ -81,9 +80,9 @@ export function ActionReviewModal({
           barcode: effectiveProd?.barcode,
           price: act.price != null ? Number(act.price) : curPrice,
           quantity: act.quantity != null ? Number(act.quantity) : (act.depotQty || act.shelfQty ? (act.depotQty || 0) + (act.shelfQty || 0) : undefined),
-          from: act.from || 'shelf',
-          to: act.to || 'depot',
-          destination: act.destination || (act.shelfQty && !act.depotQty ? 'shelf' : 'depot'),
+          from: act.from || 'depot',
+          to: act.to || 'shelf',
+          destination: act.destination || (act.action === 'TRANSFER_STOCK' ? 'shelf' : act.shelfQty && !act.depotQty ? 'shelf' : 'depot'),
           currentDepotQty: curDepot,
           currentShelfQty: curShelf,
           currentPrice: curPrice,
@@ -91,7 +90,7 @@ export function ActionReviewModal({
           isApplied: act.executed || voiceResult.executed,
         });
       });
-    } else {
+    } else if (voiceResult.intent !== 'REPLENISH_ALL_CRITICAL') {
       const prodName = voiceResult.extractedData.productQuery || mainProd?.name || 'Produto';
       list.push({
         id: 'act-0',
@@ -113,7 +112,6 @@ export function ActionReviewModal({
     }
     return list;
   }, [voiceResult]);
-
   const [editableItems, setEditableItems] = useState<EditableProductAction[]>(initialItems);
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
 
@@ -302,10 +300,14 @@ export function ActionReviewModal({
             </div>
             <div>
               <h3 className="text-base md:text-lg font-extrabold text-text-primary">
-                Resumo das Alterações
+                {voiceResult.intent === 'REPLENISH_ALL_CRITICAL'
+                  ? 'Varredura de Estoque: Reposição Prioritária'
+                  : 'Resumo das Alterações'}
               </h3>
               <p className="text-xs text-text-muted">
-                Revise, ajuste e confirme o que foi entendido
+                {voiceResult.intent === 'REPLENISH_ALL_CRITICAL'
+                  ? 'Produtos com gôndola abaixo do mínimo e saldo disponível no depósito'
+                  : 'Revise, ajuste e confirme o que foi entendido'}
               </p>
             </div>
           </div>
@@ -315,7 +317,7 @@ export function ActionReviewModal({
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-50 border border-brand-200 text-brand-700 text-xs font-extrabold shadow-xs">
               <Package className="w-4 h-4 text-brand-600" />
               <span>
-                {totalCount} {totalCount === 1 ? 'produto identificado' : 'produtos identificados'}
+                {totalCount} {totalCount === 1 ? 'item identificado' : 'itens identificados'}
               </span>
             </div>
 
@@ -327,7 +329,6 @@ export function ActionReviewModal({
             </button>
           </div>
         </div>
-
         {/* Scroll Carrossel / Navegador de Produtos caso haja múltiplos */}
         {totalCount > 1 && (
           <div className="px-5 md:px-6 py-3 bg-brand-50/40 border-b border-brand-100 flex items-center justify-between gap-2 overflow-x-auto">
@@ -375,29 +376,42 @@ export function ActionReviewModal({
           </div>
         )}
 
-        {/* Corpo do Modal - Conteúdo do Item Ativo */}
-        <div className="p-5 md:p-6 flex-1 overflow-y-auto space-y-5">
-          {errorMessage && (
-            <div className="flex items-start gap-2.5 p-3.5 bg-status-danger-bg text-status-danger border border-red-200 rounded-2xl text-xs font-medium">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{errorMessage}</span>
+        {/* Corpo do Modal - Conteúdo do Item Ativo ou Estado Vazio */}
+        {totalCount === 0 ? (
+          <div className="p-8 md:p-12 flex-1 flex flex-col items-center justify-center text-center space-y-4">
+            <div className="p-4 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-200">
+              <CheckCircle2 className="w-10 h-10" />
             </div>
-          )}
-
-          {/* O que o usuário disse */}
-          <div className="bg-canvas border border-border-neutral rounded-2xl p-3.5 flex items-start gap-2.5">
-            <TrendingUp className="w-4 h-4 text-brand-600 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted block">
-                Comando Identificado:
-              </span>
-              <p className="text-xs font-medium text-text-primary italic mt-0.5">
-                &quot;{voiceResult.transcription}&quot;
+            <div className="max-w-md space-y-1">
+              <h4 className="text-base font-extrabold text-text-primary">
+                Todas as Gôndolas estão Abastecidas!
+              </h4>
+              <p className="text-xs text-text-muted">
+                A varredura no estoque não encontrou produtos com saldo crítico ou não há saldo disponível no depósito para transferência no momento.
               </p>
             </div>
           </div>
+        ) : (
+          <div className="p-5 md:p-6 flex-1 overflow-y-auto space-y-5">
+            {errorMessage && (
+              <div className="flex items-start gap-2.5 p-3.5 bg-status-danger-bg text-status-danger border border-red-200 rounded-2xl text-xs font-medium">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
 
-          {/* Card de Edição Direta do Nome do Produto e Tipo de Ação */}
+            {/* O que o usuário disse */}
+            <div className="bg-canvas border border-border-neutral rounded-2xl p-3.5 flex items-start gap-2.5">
+              <TrendingUp className="w-4 h-4 text-brand-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <span className="text-tiny font-bold uppercase tracking-wider text-text-muted block">
+                  Comando Identificado:
+                </span>
+                <p className="text-xs font-medium text-text-primary italic mt-0.5">
+                  &quot;{voiceResult.transcription}&quot;
+                </p>
+              </div>
+            </div>
           <div className="p-4 bg-card border border-border-neutral rounded-2xl space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2 flex-1">
@@ -448,7 +462,7 @@ export function ActionReviewModal({
                 )}
                 {currentItem.action === 'TRANSFER_STOCK' && (
                   <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
-                    <Store className="w-3.5 h-3.5" /> Transferência
+                    <Store className="w-3.5 h-3.5" /> Reposição de Gôndola (Depósito ➔ Gôndola)
                   </span>
                 )}
                 {currentItem.action === 'UPDATE_PRODUCT' && (
@@ -605,40 +619,45 @@ export function ActionReviewModal({
             </div>
           </div>
         </div>
-
-        {/* Rodapé com Botões de Ação */}
+        )}
         <div className="p-5 md:p-6 border-t border-border-neutral bg-canvas flex flex-col sm:flex-row items-center justify-between gap-3 sticky bottom-0 z-10">
           <button
             type="button"
             onClick={onClose}
             className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold text-text-muted hover:text-text-primary bg-card border border-border-neutral rounded-xl transition-colors cursor-pointer"
           >
-            Fechar sem aplicar
+            {totalCount === 0 ? 'Fechar' : 'Fechar sem aplicar'}
           </button>
 
-          <button
-            type="button"
-            onClick={handleConfirmAndApplyAll}
-            disabled={isApplying || editableItems.every((i) => i.isApplied)}
-            className="w-full sm:w-auto px-6 py-3 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
-          >
-            {isApplying ? (
-              <>
-                <RotateCcw className="w-4 h-4 animate-spin" />
-                <span>Aplicando {totalCount} produto(s) no estoque...</span>
-              </>
-            ) : editableItems.every((i) => i.isApplied) ? (
-              <>
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Alterações já Aplicadas</span>
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Confirmar e Aplicar Todos ({totalCount})</span>
-              </>
-            )}
-          </button>
+          {totalCount > 0 && (
+            <button
+              type="button"
+              onClick={handleConfirmAndApplyAll}
+              disabled={isApplying || editableItems.every((i) => i.isApplied)}
+              className="w-full sm:w-auto px-6 py-3 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
+            >
+              {isApplying ? (
+                <>
+                  <RotateCcw className="w-4 h-4 animate-spin" />
+                  <span>Aplicando {totalCount} reposição(ões) no estoque...</span>
+                </>
+              ) : editableItems.every((i) => i.isApplied) ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Alterações já Aplicadas</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>
+                    {voiceResult.intent === 'REPLENISH_ALL_CRITICAL'
+                      ? `Confirmar Reposição dos ${totalCount} Produtos`
+                      : `Confirmar e Aplicar Todos (${totalCount})`}
+                  </span>
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>

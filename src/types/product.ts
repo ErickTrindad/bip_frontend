@@ -12,6 +12,7 @@ export interface Product {
   price?: number | null;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string | null;
 }
 
 export interface CriticalProduct extends Product {
@@ -119,4 +120,20 @@ export interface PosSaleResponse {
     soldQty: number;
     remainingShelfQty: number;
   }>;
+}
+
+export interface ProductDeltaSyncParams {
+  since: string;
+  tenantId?: string;
+  limit?: number;
+}
+
+export interface ProductDeltaSyncResponse {
+  syncedAt: string;
+  serverTimestamp: number;
+  totalChanged: number;
+  hasMore: boolean;
+  upserted: Product[];
+  deletedIds: string[];
+  deleted: Product[];
 }

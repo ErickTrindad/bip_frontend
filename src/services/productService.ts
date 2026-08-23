@@ -6,6 +6,8 @@ import type {
   CreateProductPayload,
   UpdateProductPayload,
   ProductListParams,
+  ProductDeltaSyncParams,
+  ProductDeltaSyncResponse,
   OpenFoodFactsLookupResponse,
   TransferStockPayload,
   PosSalePayload,
@@ -73,6 +75,16 @@ export const productService = {
     return request<PosSaleResponse>('/products/pos/sale', {
       method: 'POST',
       body: JSON.stringify(payload),
+    });
+  },
+
+  async deltaSync(params: ProductDeltaSyncParams): Promise<ProductDeltaSyncResponse> {
+    const query = new URLSearchParams();
+    query.append('since', params.since);
+    if (params.tenantId) query.append('tenantId', params.tenantId);
+    if (params.limit) query.append('limit', String(params.limit));
+    return request<ProductDeltaSyncResponse>(`/products/sync/delta?${query.toString()}`, {
+      method: 'GET',
     });
   },
 };

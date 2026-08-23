@@ -21,10 +21,10 @@ export function ActionPreviewCard({ voiceResult, onApply, isApplying }: ActionPr
   const { intent, extractedData, actions, matchedProduct, explanation, executed, executionResult } =
     voiceResult;
 
-  const totalProductsCount = actions && actions.length > 0 ? actions.length : 1;
-
-  // Se houver múltiplos produtos identificados (ex: Guaraná Antarctica Zero E Guaraná Antarctica 2L)
-  const isMultiProduct = totalProductsCount > 1;
+  const isReplenishAll = intent === 'REPLENISH_ALL_CRITICAL';
+  const totalProductsCount = actions ? actions.length : (matchedProduct ? 1 : 0);
+  const isMultiProduct = totalProductsCount > 1 || (isReplenishAll && totalProductsCount > 0);
+  const isCriticalEmpty = isReplenishAll && totalProductsCount === 0;
 
   // Calcula Previsão de Estoque e Preço Pré vs Pós do produto principal ou primeiro produto
   const currentDepot = matchedProduct ? matchedProduct.depotQty : 0;
@@ -88,18 +88,26 @@ export function ActionPreviewCard({ voiceResult, onApply, isApplying }: ActionPr
             {isMultiProduct ? <Layers3 className="w-5 h-5" /> : <Package className="w-5 h-5" />}
           </div>
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
-              {isMultiProduct ? 'Múltiplos Produtos Identificados' : 'Produto Identificado'}
+            <span className="text-tiny font-bold uppercase tracking-wider text-text-muted">
+              {isReplenishAll
+                ? 'Varredura Geral de Reposição'
+                : isMultiProduct
+                ? 'Múltiplos Produtos Identificados'
+                : 'Produto Identificado'}
             </span>
             <h4 className="text-base font-extrabold text-text-primary">
-              {isMultiProduct
+              {isReplenishAll
+                ? isCriticalEmpty
+                  ? 'Gôndolas 100% Abastecidas'
+                  : `Reposição de ${totalProductsCount} ${totalProductsCount === 1 ? 'Produto Crítico' : 'Produtos Críticos'}`
+                : isMultiProduct
                 ? `${totalProductsCount} Produtos na sua fala`
                 : matchedProduct
                 ? matchedProduct.name
                 : extractedData.productQuery || 'Produto'}
             </h4>
-            {!isMultiProduct && matchedProduct && (
-              <span className="text-[11px] text-text-muted font-mono">
+            {!isMultiProduct && !isReplenishAll && matchedProduct && (
+              <span className="text-tiny text-text-muted font-mono">
                 Cód: {matchedProduct.barcode}
               </span>
             )}
@@ -107,14 +115,18 @@ export function ActionPreviewCard({ voiceResult, onApply, isApplying }: ActionPr
         </div>
 
         {/* Status / Contador Badge */}
-        {executed ? (
+        {isCriticalEmpty ? (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <CheckCircle2 className="w-4 h-4" /> Todas Abastecidas
+          </span>
+        ) : executed ? (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
             <CheckCircle2 className="w-4 h-4" /> Aplicado ({totalProductsCount})
           </span>
         ) : (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-brand-50 border border-brand-200 text-brand-700">
             <AlertCircle className="w-4 h-4 text-brand-600" />
-            <span>{totalProductsCount} {totalProductsCount === 1 ? 'produto' : 'produtos'}</span>
+            <span>{totalProductsCount} {totalProductsCount === 1 ? 'item' : 'itens'}</span>
           </span>
         )}
       </div>
@@ -139,11 +151,25 @@ export function ActionPreviewCard({ voiceResult, onApply, isApplying }: ActionPr
         </div>
       </div>
 
-      {/* Lista Visual dos Produtos e Ações Identificadas */}
-      {isMultiProduct ? (
+      {/* Lista Visual dos Produtos e Ações Identificadas ou Estado Vazio */}
+      {isCriticalEmpty ? (
+        <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl flex items-center gap-3">
+          <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
+          <div>
+            <p className="text-xs font-bold text-emerald-900">
+              Excelente! Nenhuma gôndola está abaixo do estoque mínimo.
+            </p>
+            <p className="text-tiny text-emerald-700 mt-0.5">
+              Todos os produtos no salão de vendas possuem saldo suficiente no momento.
+            </p>
+          </div>
+        </div>
+      ) : isMultiProduct ? (
         <div className="flex flex-col gap-2.5">
           <span className="text-xs font-bold text-text-primary">
-            Produtos identificados na sua fala ({actions?.length}):
+            {isReplenishAll
+              ? `Produtos críticos para reposição prioritária (${actions?.length}):`
+              : `Produtos identificados na sua fala (${actions?.length}):`}
           </span>
 
           <div className="space-y-2">
@@ -160,10 +186,10 @@ export function ActionPreviewCard({ voiceResult, onApply, isApplying }: ActionPr
                     <span className="text-xs font-bold text-text-primary">
                       {act.productQuery || `Produto ${idx + 1}`}
                     </span>
-                    <span className="text-[11px] text-text-muted">
+                    <span className="text-tiny text-text-muted">
                       {act.action === 'STOCK_ENTRY' && `Entrada de ${act.quantity || (act.depotQty || 0) + (act.shelfQty || 0)} un`}
                       {act.action === 'REGISTER_PRODUCT' && `Novo Cadastro (${act.quantity || (act.depotQty || 0) + (act.shelfQty || 0)} un)`}
-                      {act.action === 'TRANSFER_STOCK' && `Transferir ${act.quantity} un (${act.from === 'shelf' ? 'Gôndola → Depósito' : 'Depósito → Gôndola'})`}
+                      {act.action === 'TRANSFER_STOCK' && `Reposição de ${act.quantity} un (Depósito → Gôndola)`}
                       {act.action === 'UPDATE_PRODUCT' && `Alterar Preço para R$ ${act.price?.toFixed(2)}`}
                       {act.action === 'POS_SALE' && `Venda de ${act.quantity} un`}
                     </span>
@@ -296,7 +322,7 @@ export function ActionPreviewCard({ voiceResult, onApply, isApplying }: ActionPr
       )}
 
       {/* Botão de Abrir Revisão / Aplicar */}
-      {!executed && intent !== 'UNKNOWN' && (
+      {!executed && intent !== 'UNKNOWN' && !isCriticalEmpty && (
         <div className="pt-2">
           <button
             type="button"
@@ -306,7 +332,9 @@ export function ActionPreviewCard({ voiceResult, onApply, isApplying }: ActionPr
           >
             <CheckCircle2 className="w-5 h-5" />
             <span>
-              {isMultiProduct
+              {isReplenishAll
+                ? `Revisar e Repor ${totalProductsCount} Produtos Críticos`
+                : isMultiProduct
                 ? `Revisar e Aplicar Todos os ${totalProductsCount} Produtos`
                 : 'Revisar e Confirmar Alterações'}
             </span>

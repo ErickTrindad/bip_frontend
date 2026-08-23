@@ -20,6 +20,7 @@ import {
   ArrowDown,
   X,
   Filter,
+  Clock,
 } from 'lucide-react';
 import { productService } from '../services/productService';
 import { ApiError } from '../services/api';
@@ -32,9 +33,8 @@ import { db } from '../lib/db';
 
 type ViewTab = 'all' | 'critical';
 type DisplayMode = 'cards' | 'table';
-type SortField = 'name' | 'category' | 'depotQty' | 'shelfQty' | 'price';
+type SortField = 'name' | 'category' | 'depotQty' | 'shelfQty' | 'price' | 'updatedAt';
 type SortDirection = 'asc' | 'desc';
-
 export function ProductsPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -50,6 +50,7 @@ export function ProductsPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [isLoading, setIsLoading] = useState(false);
   const [isCriticalLoading, setIsCriticalLoading] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [formInitialBarcode, setFormInitialBarcode] = useState<string>('');
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
@@ -95,6 +96,31 @@ export function ProductsPage() {
     setIsLoading(true);
     try {
       if (navigator.onLine) {
+        // Se não houver filtro de busca/categoria ativo, tenta delta sync rápido se já tiver sincronizado antes
+        const lastSyncIso = localStorage.getItem('@gopme:last_synced_at');
+        
+        if (lastSyncIso && !searchTerm && !selectedCategory) {
+          try {
+            const delta = await productService.deltaSync({ since: lastSyncIso });
+            
+            // Se houver deletados no delta, remove do Dexie
+            if (delta.deletedIds && delta.deletedIds.length > 0) {
+              await db.products.bulkDelete(delta.deletedIds);
+            }
+            
+            // Se houver upserted, atualiza no Dexie
+            if (delta.upserted && delta.upserted.length > 0) {
+              await db.products.bulkPut(
+                delta.upserted.map((p) => ({ ...p, synced: true }))
+              );
+            }
+            
+            localStorage.setItem('@gopme:last_synced_at', delta.syncedAt);
+          } catch (deltaErr) {
+            console.warn('Delta sync falhou, prosseguindo com listagem completa:', deltaErr);
+          }
+        }
+
         const response = await productService.list({
           search: searchTerm || undefined,
           category: selectedCategory || undefined,
@@ -115,6 +141,7 @@ export function ProductsPage() {
             response.products.map((p) => ({ ...p, synced: true }))
           ).catch((e) => console.warn('Dexie save error:', e));
         }
+        localStorage.setItem('@gopme:last_synced_at', new Date().toISOString());
       } else {
         // Offline load from IndexedDB
         let offlineList = await db.products.toArray();
@@ -148,9 +175,9 @@ export function ProductsPage() {
       setTotalCount(offlineList.length);
     } finally {
       setIsLoading(false);
+      setLastUpdated(new Date());
     }
   }, [searchTerm, selectedCategory]);
-
   // Fetch critical products
   const fetchCriticalProducts = useCallback(async () => {
     setIsCriticalLoading(true);
@@ -501,17 +528,30 @@ export function ProductsPage() {
               </button>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                fetchProducts();
-                fetchCriticalProducts();
-              }}
-              title="Atualizar Lista"
-              className="min-w-[44px] min-h-[44px] p-2.5 bg-card hover:bg-neutral-100 border border-border-neutral rounded-xl text-text-muted hover:text-text-primary transition-colors cursor-pointer flex items-center justify-center"
-            >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-            </button>
+            <div className="flex items-center gap-1.5 bg-card px-2.5 py-1.5 border border-border-neutral rounded-xl h-11 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  fetchProducts();
+                  fetchCriticalProducts();
+                }}
+                title="Atualizar Lista de Produtos"
+                className="min-w-[32px] min-h-[32px] p-1.5 hover:bg-neutral-100 rounded-lg text-text-muted hover:text-text-primary transition-colors cursor-pointer flex items-center justify-center"
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-brand-600' : ''}`} />
+              </button>
+
+              {lastUpdated && (
+                <div className="flex flex-col text-left pr-1 select-none">
+                  <span className="text-tiny text-text-muted flex items-center gap-1">
+                    <Clock className="w-2.5 h-2.5" /> Atualizado
+                  </span>
+                  <span className="text-tiny font-bold text-text-primary font-mono leading-tight">
+                    {lastUpdated.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
         {/* Feedback visual de filtros ativos */}
@@ -639,8 +679,12 @@ export function ProductsPage() {
                           {product.category && (
                             <span className="text-tiny text-text-muted font-medium block mt-0.5">{product.category}</span>
                           )}
+                          {product.updatedAt && (
+                            <span className="text-tiny text-text-muted/80 block mt-1">
+                              Editado em: {new Date(product.updatedAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
                         </div>
-
                         {/* Price Badge */}
                         {product.price !== undefined && product.price !== null && (
                           <span className="text-xs font-mono font-bold text-text-primary bg-canvas border border-border-neutral px-2 py-0.5 rounded-xl shrink-0">
@@ -836,6 +880,19 @@ export function ProductsPage() {
                             )}
                           </div>
                         </th>
+                        <th
+                          onClick={() => handleSort('updatedAt')}
+                          className="py-3.5 px-4 cursor-pointer hover:text-text-primary select-none text-right hidden lg:table-cell"
+                        >
+                          <div className="flex items-center justify-end gap-1.5">
+                            <span>Atualizado</span>
+                            {sortField === 'updatedAt' ? (
+                              sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />
+                            ) : (
+                              <ArrowUpDown className="w-3.5 h-3.5 opacity-40" />
+                            )}
+                          </div>
+                        </th>
                         <th className="py-3.5 px-4 text-center">Ações</th>
                       </tr>
                     </thead>
@@ -870,6 +927,16 @@ export function ProductsPage() {
                             <td className="py-3 px-4 text-right font-mono font-bold text-xs text-text-primary hidden sm:table-cell">
                               {product.price !== undefined && product.price !== null
                                 ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(product.price))
+                                : '-'}
+                            </td>
+                            <td className="py-3 px-4 text-right font-mono text-tiny text-text-muted hidden lg:table-cell">
+                              {product.updatedAt
+                                ? new Date(product.updatedAt).toLocaleDateString('pt-BR', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })
                                 : '-'}
                             </td>
                             <td className="py-2.5 px-4">
@@ -1046,7 +1113,13 @@ export function ProductsPage() {
 
       <PosSaleModal
         isOpen={isPosModalOpen}
-        onClose={() => setIsPosModalOpen(false)}
+        onClose={() => {
+          setIsPosModalOpen(false);
+          // Se a rota continha ?modal=pos, limpa para /products para redefinir o active no sidebar
+          if (location.search.includes('modal=pos')) {
+            navigate('/products', { replace: true });
+          }
+        }}
         onSuccess={handlePosSaleSuccess}
         onOpenScanner={() => {
           setScannerTarget('pos');
@@ -1056,7 +1129,6 @@ export function ProductsPage() {
         scannedBarcode={posScannedBarcode}
         onBarcodeConsumed={() => setPosScannedBarcode(null)}
       />
-
       <BarcodeScannerModal
         isOpen={isScannerModalOpen}
         onClose={() => setIsScannerModalOpen(false)}
