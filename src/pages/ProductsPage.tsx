@@ -17,6 +17,7 @@ import {
   Wifi,
   WifiOff,
   CheckCircle,
+  Sparkles,
 } from 'lucide-react';
 import { useAuth } from '../contexts/useAuth';
 import { productService } from '../services/productService';
@@ -287,6 +288,15 @@ export function ProductsPage() {
             <span className="font-bold text-text-primary">{user?.name}</span>
             <span className="text-[10px] text-text-muted">{user?.email}</span>
           </div>
+
+          <button
+            onClick={() => navigate('/ai')}
+            className="p-2 bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+            title="AI Studio (Comando de Voz & Transcrição)"
+          >
+            <Sparkles className="w-4 h-4 text-brand-600" />
+            <span className="hidden sm:inline font-bold text-xs">AI Studio</span>
+          </button>
 
           <button
             onClick={logout}

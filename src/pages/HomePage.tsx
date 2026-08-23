@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/useAuth';
-import { LogOut, Store, ArrowRight } from 'lucide-react';
+import { LogOut, Store, ArrowRight, Sparkles } from 'lucide-react';
 
 export function HomePage() {
   const { user, tenant, isAuthenticated, logout } = useAuth();
@@ -42,6 +42,13 @@ export function HomePage() {
               >
                 <Store className="w-4 h-4" />
                 <span>Acessar Painel de Produtos</span>
+              </Link>
+              <Link
+                to="/ai"
+                className="w-full py-2.5 bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-sm cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 text-brand-600" />
+                <span>AI Studio (Voz & Transcrição)</span>
               </Link>
               <button
                 onClick={logout}
