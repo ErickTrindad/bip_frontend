@@ -65,8 +65,11 @@ export interface MatchedProduct {
 export interface VoiceActionItem {
   action: 'UPDATE_PRODUCT' | 'STOCK_ENTRY' | 'TRANSFER_STOCK' | 'POS_SALE' | 'CHECK_STOCK' | 'REGISTER_PRODUCT';
   productQuery?: string | null;
+  matchedProduct?: MatchedProduct | null;
   price?: number | null;
   quantity?: number | null;
+  depotQty?: number | null;
+  shelfQty?: number | null;
   from?: 'depot' | 'shelf' | null;
   to?: 'depot' | 'shelf' | null;
   destination?: 'depot' | 'shelf' | null;
