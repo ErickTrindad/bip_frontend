@@ -89,54 +89,54 @@ export function TransferStockModal({
       <div className="w-full max-w-md bg-card border border-border-neutral rounded-3xl p-6 shadow-2xl relative flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-border-neutral mb-4">
-          <div className="flex items-center gap-2 text-brand-600 font-bold">
+          <div className="flex items-center gap-2.5 text-brand-600 font-bold">
             <ArrowRight className="w-5 h-5" />
-            <h3 className="text-base text-text-primary font-bold">Reposição Rápida de Gôndola</h3>
+            <h3 className="text-base text-text-primary font-extrabold">Reposição Rápida de Gôndola</h3>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-neutral-100 rounded-lg transition-colors cursor-pointer"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-neutral-100 rounded-xl transition-colors cursor-pointer"
+            title="Fechar (Esc)"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
-
         {/* Product preview */}
-        <div className="p-3.5 bg-canvas border border-border-neutral rounded-2xl mb-4 space-y-1">
-          <span className="text-[10px] font-mono bg-neutral-200/70 text-text-muted px-2 py-0.5 rounded-full font-bold">
+        <div className="p-4 bg-canvas border border-border-neutral rounded-2xl mb-4 space-y-1.5">
+          <span className="text-xs font-mono bg-neutral-200/70 text-text-muted px-2.5 py-0.5 rounded-full font-bold">
             {product.barcode}
           </span>
-          <h4 className="font-bold text-text-primary text-sm line-clamp-1">{product.name}</h4>
+          <h4 className="font-extrabold text-text-primary text-base line-clamp-1">{product.name}</h4>
           {product.category && (
-            <p className="text-xs text-text-muted">{product.category}</p>
+            <p className="text-xs text-text-muted font-medium">{product.category}</p>
           )}
         </div>
 
         {/* Stock Flow Diagram */}
-        <div className="grid grid-cols-2 gap-2 mb-4">
-          <div className="p-3 bg-neutral-100 border border-border-neutral rounded-xl text-center space-y-1">
-            <span className="text-[11px] text-text-muted font-medium flex items-center justify-center gap-1">
-              <Package className="w-3 h-3" /> Depósito Atual
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="p-3.5 bg-neutral-100 border border-border-neutral rounded-2xl text-center space-y-1">
+            <span className="text-xs text-text-muted font-semibold flex items-center justify-center gap-1.5">
+              <Package className="w-3.5 h-3.5" /> Depósito Atual
             </span>
-            <p className="text-lg font-mono font-extrabold text-text-primary">
+            <p className="text-xl font-mono font-black text-text-primary">
               {product.depotQty}{' '}
               <span className="text-xs font-normal text-text-muted">un</span>
             </p>
             {product.depotLocation && (
-              <p className="text-[10px] text-text-muted truncate">{product.depotLocation}</p>
+              <p className="text-xs text-text-muted truncate">{product.depotLocation}</p>
             )}
           </div>
 
-          <div className="p-3 bg-brand-50 border border-brand-100 rounded-xl text-center space-y-1">
-            <span className="text-[11px] text-brand-800 font-medium flex items-center justify-center gap-1">
-              <Layers className="w-3 h-3" /> Gôndola Atual
+          <div className="p-3.5 bg-brand-50 border border-brand-100 rounded-2xl text-center space-y-1">
+            <span className="text-xs text-brand-800 font-semibold flex items-center justify-center gap-1.5">
+              <Layers className="w-3.5 h-3.5" /> Gôndola Atual
             </span>
-            <p className="text-lg font-mono font-extrabold text-brand-600">
+            <p className="text-xl font-mono font-black text-brand-600">
               {product.shelfQty}{' '}
               <span className="text-xs font-normal text-text-muted">/ min {product.shelfMinQty}</span>
             </p>
             {product.shelfLocation && (
-              <p className="text-[10px] text-brand-700 truncate">{product.shelfLocation}</p>
+              <p className="text-xs text-brand-700 truncate">{product.shelfLocation}</p>
             )}
           </div>
         </div>
@@ -150,18 +150,18 @@ export function TransferStockModal({
             </div>
           )}
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-[11px] font-bold text-text-muted">
-                Quantidade a Transferir do Depósito para a Gôndola
+              <label className="text-xs font-bold text-text-primary">
+                Quantidade a Transferir (Depósito &rarr; Gôndola)
               </label>
               {product.depotQty > 0 && (
-                <div className="flex gap-1.5">
+                <div className="flex gap-2">
                   {product.shelfMinQty > product.shelfQty && (
                     <button
                       type="button"
                       onClick={handleSetDeficit}
-                      className="text-[10px] text-brand-600 hover:underline font-bold"
+                      className="text-xs text-brand-600 hover:underline font-bold"
                     >
                       Completar Mínimo
                     </button>
@@ -169,7 +169,7 @@ export function TransferStockModal({
                   <button
                     type="button"
                     onClick={handleSetMax}
-                    className="text-[10px] text-text-muted hover:text-text-primary font-bold"
+                    className="text-xs text-text-muted hover:text-text-primary font-bold"
                   >
                     Tudo ({product.depotQty})
                   </button>
@@ -181,10 +181,9 @@ export function TransferStockModal({
               type="number"
               min="1"
               max={product.depotQty}
-              required
               value={quantity}
               onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
-              className="w-full px-3 py-2.5 bg-canvas border border-border-neutral rounded-xl text-text-primary text-sm font-mono font-bold text-center focus:outline-none focus:border-brand-500"
+              className="w-full h-12 px-4 bg-canvas border border-border-neutral rounded-xl text-text-primary text-base font-mono font-bold focus:outline-none focus:border-brand-500"
             />
           </div>
 
@@ -207,25 +206,25 @@ export function TransferStockModal({
           )}
 
           {/* Action buttons */}
-          <div className="pt-2 flex items-center justify-end gap-2">
+          <div className="flex items-center justify-end gap-2.5 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 bg-card hover:bg-neutral-100 border border-border-neutral text-text-primary font-bold rounded-xl transition-colors cursor-pointer"
+              className="min-h-[44px] px-5 bg-canvas hover:bg-neutral-100 border border-border-neutral text-text-primary font-bold rounded-xl transition-colors cursor-pointer text-xs"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={isLoading || product.depotQty <= 0}
-              className="px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-colors shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              className="min-h-[44px] px-6 bg-brand-600 hover:bg-brand-700 text-white font-extrabold rounded-xl transition-colors shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50 text-xs sm:text-sm"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <CheckCircle2 className="w-4 h-4" />
               )}
-              <span>Transferir para Gôndola</span>
+              <span>Confirmar Reposição</span>
             </button>
           </div>
         </form>

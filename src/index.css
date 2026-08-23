@@ -20,4 +20,11 @@
   --color-status-warning-bg: #FEFCE8;
   --color-status-danger: #DC2626;
   --color-status-danger-bg: #FEF2F2;
+
+  --font-size-tiny: 10px;
+}
+
+@utility text-tiny {
+  font-size: 10px;
+  line-height: 14px;
 }

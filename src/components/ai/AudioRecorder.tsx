@@ -148,7 +148,7 @@ export function AudioRecorder({ onAudioReady, disabled }: AudioRecorderProps) {
     <div className="flex flex-col gap-3 p-4 bg-canvas border border-border-neutral rounded-2xl">
       <div className="flex items-center justify-between">
         <span className="text-xs font-bold uppercase tracking-wider text-text-muted">
-          Gravador de Áudio Chão de Loja
+          Gravação de Voz
         </span>
         {isRecording && (
           <span className="flex items-center gap-1.5 text-xs font-bold text-status-danger animate-pulse">

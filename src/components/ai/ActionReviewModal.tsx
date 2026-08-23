@@ -31,6 +31,7 @@ interface ActionReviewModalProps {
 
 export interface EditableProductAction {
   id: string;
+  productId?: string;
   action: VoiceActionItem['action'];
   productName: string;
   barcode?: string;
@@ -74,8 +75,9 @@ export function ActionReviewModal({
 
         list.push({
           id: `act-${idx}`,
+          productId: effectiveProd?.id,
           action: act.action,
-          productName: prodName,
+          productName: effectiveProd?.name || prodName,
           barcode: effectiveProd?.barcode,
           price: act.price != null ? Number(act.price) : curPrice,
           quantity: act.quantity != null ? Number(act.quantity) : (act.depotQty || act.shelfQty ? (act.depotQty || 0) + (act.shelfQty || 0) : undefined),
@@ -93,8 +95,9 @@ export function ActionReviewModal({
       const prodName = voiceResult.extractedData.productQuery || mainProd?.name || 'Produto';
       list.push({
         id: 'act-0',
+        productId: mainProd?.id,
         action: voiceResult.intent !== 'UNKNOWN' && voiceResult.intent !== 'COMPOUND_ACTION' ? voiceResult.intent : 'STOCK_ENTRY',
-        productName: prodName,
+        productName: mainProd?.name || prodName,
         barcode: mainProd?.barcode || voiceResult.extractedData.barcode,
         price: voiceResult.extractedData.newPrice ?? voiceResult.extractedData.price ?? (mainProd?.price != null ? Number(mainProd.price) : null),
         quantity: voiceResult.extractedData.quantity,
@@ -114,18 +117,32 @@ export function ActionReviewModal({
   const [editableItems, setEditableItems] = useState<EditableProductAction[]>(initialItems);
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
 
-  // Busca em segundo plano o saldo real de itens que ainda não tinham sido carregados
+  // Sincroniza editableItems quando o modal abre ou novo voiceResult chega
   useEffect(() => {
+    setEditableItems(initialItems);
+    setActiveItemIndex(0);
+  }, [initialItems, isOpen]);
+
+  // Busca em segundo plano o produto caso não tenha sido identificado pelo id
+  useEffect(() => {
+    if (!isOpen) return;
     editableItems.forEach((item, idx) => {
-      if (!item.isExistingProduct && item.productName) {
-        productService.list({ search: item.productName, limit: 1 }).then((res) => {
-          const found = res.products?.[0];
-          if (found && found.name.toLowerCase().includes(item.productName.toLowerCase().slice(0, 5))) {
+      if (!item.productId && item.productName) {
+        productService.list({ search: item.productName, limit: 10 }).then((res) => {
+          const found = res.products?.find((p) =>
+            p.name.toLowerCase().includes(item.productName.toLowerCase()) ||
+            item.productName.toLowerCase().includes(p.name.toLowerCase()) ||
+            p.barcode === item.barcode
+          ) || res.products?.[0];
+
+          if (found) {
             setEditableItems((prev) =>
               prev.map((it, i) =>
                 i === idx
                   ? {
                       ...it,
+                      productId: found.id,
+                      productName: found.name,
                       barcode: found.barcode,
                       currentDepotQty: found.depotQty,
                       currentShelfQty: found.shelfQty,
@@ -139,8 +156,7 @@ export function ActionReviewModal({
         }).catch(() => {});
       }
     });
-  }, [isOpen]);
-
+  }, [isOpen, editableItems]);
   if (!isOpen) return null;
 
   const currentItem = editableItems[activeItemIndex] || editableItems[0];
@@ -186,9 +202,28 @@ export function ActionReviewModal({
     startTransition(async () => {
       try {
         for (const item of editableItems) {
-          // 1. Procura produto existente por nome ou código de barras
-          const searchRes = await productService.list({ search: item.productName, limit: 1 }).catch(() => null);
-          const foundProduct = searchRes?.products?.[0];
+          // Procura produto existente por id, barcode ou nome
+          let targetId = item.productId;
+          let foundProduct = null;
+
+          if (targetId) {
+            foundProduct = await productService.getById(targetId).then((r) => r.product).catch(() => null);
+          }
+
+          if (!foundProduct && item.barcode) {
+            foundProduct = await productService.getByBarcode(item.barcode).then((r) => r.product).catch(() => null);
+            if (foundProduct) targetId = foundProduct.id;
+          }
+
+          if (!foundProduct && item.productName) {
+            const searchRes = await productService.list({ search: item.productName, limit: 10 }).catch(() => null);
+            foundProduct = searchRes?.products?.find((p) =>
+              p.name.toLowerCase() === item.productName.toLowerCase() ||
+              p.name.toLowerCase().includes(item.productName.toLowerCase()) ||
+              item.productName.toLowerCase().includes(p.name.toLowerCase())
+            ) || searchRes?.products?.[0] || null;
+            if (foundProduct) targetId = foundProduct.id;
+          }
 
           if (item.action === 'REGISTER_PRODUCT' || (!foundProduct && !item.isExistingProduct)) {
             // Criação de produto
@@ -201,29 +236,39 @@ export function ActionReviewModal({
               shelfMinQty: 5,
               price: item.price != null ? Number(item.price) : undefined,
             });
-          } else if (foundProduct) {
-            // Atualiza preço ou dados
-            if (item.action === 'UPDATE_PRODUCT' && item.price != null) {
-              await productService.update(foundProduct.id, { price: Number(item.price) });
+          } else if (foundProduct && targetId) {
+            // Atualização de Preço e/ou Dados
+            const updatePayload: { price?: number; depotQty?: number; shelfQty?: number } = {};
+
+            if (item.price !== undefined && item.price !== null) {
+              updatePayload.price = Number(item.price);
             }
+
             // Entrada de estoque
             if (item.action === 'STOCK_ENTRY' && item.quantity) {
               const addQty = Number(item.quantity);
-              await productService.update(foundProduct.id, {
-                depotQty: item.destination === 'depot' ? foundProduct.depotQty + addQty : foundProduct.depotQty,
-                shelfQty: item.destination === 'shelf' ? foundProduct.shelfQty + addQty : foundProduct.shelfQty,
-              });
+              if (item.destination === 'shelf') {
+                updatePayload.shelfQty = foundProduct.shelfQty + addQty;
+              } else {
+                updatePayload.depotQty = foundProduct.depotQty + addQty;
+              }
             }
+
+            // Aplica update de preço ou quantidades
+            if (Object.keys(updatePayload).length > 0) {
+              await productService.update(targetId, updatePayload);
+            }
+
             // Transferência
             if (item.action === 'TRANSFER_STOCK' && item.quantity) {
               const transferQty = Number(item.quantity);
               if (item.from === 'shelf' && item.to === 'depot') {
-                await productService.update(foundProduct.id, {
+                await productService.update(targetId, {
                   shelfQty: Math.max(0, foundProduct.shelfQty - transferQty),
                   depotQty: foundProduct.depotQty + transferQty,
                 });
               } else {
-                await productService.transferStock(foundProduct.id, { quantity: transferQty });
+                await productService.transferStock(targetId, { quantity: transferQty });
               }
             }
           }

@@ -4,10 +4,8 @@ import { WifiOff, ShieldCheck, CircleAlert } from "lucide-react";
 import { LoginForm } from "../components/auth/LoginForm";
 import { RegisterForm } from "../components/auth/RegisterForm";
 import { ForgotPasswordForm } from "../components/auth/ForgotPasswordForm";
-import { JwtModal } from "../components/auth/JwtModal";
 import { useAuth } from "../contexts/useAuth";
 import type {
-  AuthResponse,
   LoginPayload,
   RegisterPayload,
 } from "../types/auth";
@@ -17,8 +15,6 @@ type AuthTab = "login" | "register" | "forgot";
 
 export function AuthPage() {
   const [activeTab, setActiveTab] = useState<AuthTab>("register");
-  const [authResponse, setAuthResponse] = useState<AuthResponse | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const { login, register, isLoading } = useAuth();
@@ -27,9 +23,10 @@ export function AuthPage() {
   const handleLoginSubmit = async (payload: LoginPayload) => {
     setErrorMessage(null);
     try {
-      const res = await login(payload);
-      setAuthResponse(res);
-      setIsModalOpen(true);
+      await login(payload);
+      navigate("/products", {
+        state: { welcomeMessage: "Bem-vindo de volta ao seu painel!" },
+      });
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         setErrorMessage(err.message);
@@ -44,9 +41,10 @@ export function AuthPage() {
   const handleRegisterSubmit = async (payload: RegisterPayload) => {
     setErrorMessage(null);
     try {
-      const res = await register(payload);
-      setAuthResponse(res);
-      setIsModalOpen(true);
+      await register(payload);
+      navigate("/products", {
+        state: { welcomeMessage: "Conta criada com sucesso! Bem-vindo ao GO PME." },
+      });
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         if (err.issues && Object.keys(err.issues).length > 0) {
@@ -64,10 +62,6 @@ export function AuthPage() {
     }
   };
 
-  const handleModalContinue = () => {
-    setIsModalOpen(false);
-    navigate("/products");
-  };
 
   return (
     <div className="bg-canvas text-text-primary min-h-screen flex items-center justify-center p-3 sm:p-6 antialiased">
@@ -224,13 +218,6 @@ export function AuthPage() {
         </div>
       </main>
 
-      {/* Result Modal */}
-      <JwtModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        authData={authResponse}
-        onContinue={handleModalContinue}
-      />
     </div>
   );
 }

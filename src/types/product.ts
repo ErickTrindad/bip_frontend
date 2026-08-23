@@ -90,7 +90,13 @@ export type PaymentMethod =
   | 'PIX'
   | 'CARTAO_DEBITO'
   | 'CARTAO_CREDITO'
-  | 'OUTROS';
+  | 'OUTROS'
+  | 'MULTIPLOS';
+
+export interface PaymentSplitItem {
+  method: 'DINHEIRO' | 'PIX' | 'CARTAO_DEBITO' | 'CARTAO_CREDITO' | 'OUTROS';
+  amount: number;
+}
 
 export interface PosSalePayload {
   items: Array<{
@@ -99,8 +105,8 @@ export interface PosSalePayload {
     unitPrice: number;
   }>;
   paymentMethod: PaymentMethod;
+  payments?: PaymentSplitItem[];
 }
-
 export interface PosSaleResponse {
   message: string;
   paymentMethod: PaymentMethod;

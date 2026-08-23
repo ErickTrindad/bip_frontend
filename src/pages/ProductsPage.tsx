@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Package,
   Plus,
@@ -11,15 +11,16 @@ import {
   Edit2,
   Trash2,
   ArrowRightLeft,
-  Store,
-  LogOut,
   TrendingDown,
-  Wifi,
-  WifiOff,
   CheckCircle,
-  Sparkles,
+  LayoutGrid,
+  List,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  X,
+  Filter,
 } from 'lucide-react';
-import { useAuth } from '../contexts/useAuth';
 import { productService } from '../services/productService';
 import { ApiError } from '../services/api';
 import type { Product, CriticalProduct } from '../types/product';
@@ -30,11 +31,13 @@ import { BarcodeScannerModal } from '../components/products/BarcodeScannerModal'
 import { db } from '../lib/db';
 
 type ViewTab = 'all' | 'critical';
+type DisplayMode = 'cards' | 'table';
+type SortField = 'name' | 'category' | 'depotQty' | 'shelfQty' | 'price';
+type SortDirection = 'asc' | 'desc';
 
 export function ProductsPage() {
-  const { user, tenant, logout, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<ViewTab>('all');
   const [products, setProducts] = useState<Product[]>([]);
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
@@ -42,10 +45,11 @@ export function ProductsPage() {
   const [totalCount, setTotalCount] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('cards');
+  const [sortField, setSortField] = useState<SortField>('name');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [isLoading, setIsLoading] = useState(false);
   const [isCriticalLoading, setIsCriticalLoading] = useState(false);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  // Modals state
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [formInitialBarcode, setFormInitialBarcode] = useState<string>('');
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
@@ -58,26 +62,35 @@ export function ProductsPage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Auth Guard
+  // Handle welcome message or redirect state
   useEffect(() => {
-    if (!isAuthenticated) {
-      navigate('/auth');
+    const state = location.state;
+    if (state && typeof state === 'object' && 'welcomeMessage' in state && typeof state.welcomeMessage === 'string') {
+      setFeedbackMessage({
+        type: 'success',
+        text: state.welcomeMessage,
+      });
+      navigate(location.pathname, { replace: true, state: {} });
+      const timer = setTimeout(() => setFeedbackMessage(null), 5000);
+      return () => clearTimeout(timer);
     }
-  }, [isAuthenticated, navigate]);
-
-  // Online / Offline tracking
+  }, [location, navigate]);
+  // Sincroniza com parâmetros de URL (ex: ?tab=critical ou ?modal=pos da sidebar/bottom-nav)
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
+    const searchParams = new URLSearchParams(location.search);
+    const tabParam = searchParams.get('tab');
+    const modalParam = searchParams.get('modal');
 
-  // Fetch products
+    if (tabParam === 'critical') {
+      setActiveTab('critical');
+    } else if (tabParam === 'all') {
+      setActiveTab('all');
+    }
+
+    if (modalParam === 'pos') {
+      setIsPosModalOpen(true);
+    }
+  }, [location.search]);
   const fetchProducts = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -243,75 +256,40 @@ export function ProductsPage() {
       setPosScannedBarcode(code);
     }
   };
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Ordenação rápida de produtos
+  const sortedProducts = [...products].sort((a, b) => {
+    let valA = a[sortField];
+    let valB = b[sortField];
+
+    if (valA === null || valA === undefined) valA = '';
+    if (valB === null || valB === undefined) valB = '';
+
+    if (typeof valA === 'string' && typeof valB === 'string') {
+      const comp = valA.localeCompare(valB, 'pt-BR', { sensitivity: 'base' });
+      return sortDirection === 'asc' ? comp : -comp;
+    }
+
+    const numA = Number(valA) || 0;
+    const numB = Number(valB) || 0;
+    return sortDirection === 'asc' ? numA - numB : numB - numA;
+  });
+
   // Lista acumulada de categorias
   const categories = availableCategories.slice().sort((a, b) => a.localeCompare(b));
 
   return (
-    <div className="min-h-screen bg-canvas text-text-primary flex flex-col antialiased">
-      {/* Top Navbar */}
-      <header className="sticky top-0 z-30 bg-card/95 backdrop-blur border-b border-border-neutral px-4 sm:px-8 py-3.5 flex items-center justify-between shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-brand-50 text-brand-600 rounded-xl border border-brand-100 flex items-center justify-center">
-            <Store className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-extrabold text-brand-600 tracking-tight text-base sm:text-lg">
-                GO PME
-              </span>
-              <span className="text-[10px] bg-brand-100 text-brand-700 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                {tenant?.category || 'Loja'}
-              </span>
-            </div>
-            <p className="text-xs text-text-muted hidden sm:block truncate max-w-xs">
-              {tenant?.name || 'Minha Loja'}
-            </p>
-          </div>
-        </div>
-        {/* Right Header Status / User Info */}
-        <div className="flex items-center gap-2 sm:gap-4 text-xs">
-          {/* Online/Offline Badge */}
-          <div
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
-              isOnline
-                ? 'bg-status-success-bg text-status-success border-status-success/30'
-                : 'bg-status-warning-bg text-status-warning border-status-warning/40'
-            }`}
-            title={isOnline ? 'Online (Supabase Conectado)' : 'Offline (Modo Local Dexie)'}
-          >
-            {isOnline ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
-            <span className="hidden md:inline">{isOnline ? 'Online' : 'Offline'}</span>
-          </div>
-
-          {/* User profile info */}
-          <div className="hidden sm:flex flex-col text-right">
-            <span className="font-bold text-text-primary">{user?.name}</span>
-            <span className="text-[10px] text-text-muted">{user?.email}</span>
-          </div>
-
-          <button
-            onClick={() => navigate('/ai')}
-            className="p-2 bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
-            title="AI Studio (Comando de Voz & Transcrição)"
-          >
-            <Sparkles className="w-4 h-4 text-brand-600" />
-            <span className="hidden sm:inline font-bold text-xs">AI Studio</span>
-          </button>
-
-          <button
-            onClick={logout}
-            className="p-2 bg-canvas hover:bg-neutral-100 text-text-muted hover:text-text-primary border border-border-neutral rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
-            title="Encerrar Sessão"
-          >
-            <LogOut className="w-4 h-4" />
-            <span className="hidden sm:inline font-bold text-xs">Sair</span>
-          </button>
-        </div>
-      </header>
-
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8 space-y-6">
-        {/* Feedback Alert */}
+    <div className="max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8 space-y-6">
+      {/* Feedback Alert */}
         {feedbackMessage && (
           <div
             className={`p-4 rounded-2xl border text-xs font-semibold flex items-center justify-between shadow-md animate-fade-in ${
@@ -454,35 +432,35 @@ export function ProductsPage() {
             </button>
           </div>
 
-          {/* Search and Filters */}
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1 sm:w-64">
+          {/* Search, Filters & View Toggle */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 sm:w-60">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Buscar por nome ou código..."
-                className="w-full pl-9 pr-3 py-2 bg-card border border-border-neutral rounded-xl text-xs text-text-primary focus:outline-none focus:border-brand-500"
+                className="w-full h-11 pl-9 pr-3 bg-card border border-border-neutral rounded-xl text-xs text-text-primary focus:outline-none focus:border-brand-500 font-medium"
               />
             </div>
-
             <button
+              type="button"
               onClick={() => {
                 setScannerTarget('search');
                 setIsScannerModalOpen(true);
               }}
               title="Escanear com a Câmera"
-              className="p-2 bg-card hover:bg-neutral-100 border border-border-neutral rounded-xl text-text-primary transition-colors cursor-pointer"
+              className="min-w-[44px] min-h-[44px] p-2.5 bg-card hover:bg-neutral-100 border border-border-neutral rounded-xl text-text-primary transition-colors cursor-pointer flex items-center justify-center"
             >
-              <Barcode className="w-4 h-4 text-brand-600" />
+              <Barcode className="w-5 h-5 text-brand-600" />
             </button>
 
             {categories.length > 0 && (
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="px-3 py-2 bg-card border border-border-neutral rounded-xl text-xs text-text-primary focus:outline-none focus:border-brand-500 cursor-pointer"
+                className="h-11 px-3 bg-card border border-border-neutral rounded-xl text-xs text-text-primary font-medium focus:outline-none focus:border-brand-500 cursor-pointer"
               >
                 <option value="">Todas Categorias</option>
                 {categories.map((c) => (
@@ -493,37 +471,134 @@ export function ProductsPage() {
               </select>
             )}
 
+            {/* Alternador de Visualização: Cards vs Tabela */}
+            <div className="flex items-center bg-card p-1 border border-border-neutral rounded-xl h-11">
+              <button
+                type="button"
+                onClick={() => setDisplayMode('cards')}
+                className={`min-w-[36px] h-9 px-2.5 rounded-lg flex items-center justify-center gap-1 text-xs font-bold transition-all cursor-pointer ${
+                  displayMode === 'cards'
+                    ? 'bg-brand-600 text-white shadow-xs'
+                    : 'text-text-muted hover:text-text-primary'
+                }`}
+                title="Visualização em Cards"
+              >
+                <LayoutGrid className="w-4 h-4" />
+                <span className="hidden lg:inline text-xs">Cards</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDisplayMode('table')}
+                className={`min-w-[36px] h-9 px-2.5 rounded-lg flex items-center justify-center gap-1 text-xs font-bold transition-all cursor-pointer ${
+                  displayMode === 'table'
+                    ? 'bg-brand-600 text-white shadow-xs'
+                    : 'text-text-muted hover:text-text-primary'
+                }`}
+                title="Visualização em Tabela Compacta"
+              >
+                <List className="w-4 h-4" />
+                <span className="hidden lg:inline text-xs">Tabela</span>
+              </button>
+            </div>
+
             <button
+              type="button"
               onClick={() => {
                 fetchProducts();
                 fetchCriticalProducts();
               }}
               title="Atualizar Lista"
-              className="p-2 bg-card hover:bg-neutral-100 border border-border-neutral rounded-xl text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+              className="min-w-[44px] min-h-[44px] p-2.5 bg-card hover:bg-neutral-100 border border-border-neutral rounded-xl text-text-muted hover:text-text-primary transition-colors cursor-pointer flex items-center justify-center"
             >
               <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
+        {/* Feedback visual de filtros ativos */}
+        {(searchTerm || selectedCategory) && (
+          <div className="flex flex-wrap items-center gap-2 p-2.5 bg-brand-50/70 border border-brand-200/60 rounded-2xl text-xs animate-fadeIn">
+            <span className="flex items-center gap-1 text-brand-800 font-bold text-tiny uppercase tracking-wider">
+              <Filter className="w-3 h-3" /> Filtros Ativos ({products.length} {products.length === 1 ? 'encontrado' : 'encontrados'}):
+            </span>
+
+            {searchTerm && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-card border border-border-neutral rounded-xl font-medium text-text-primary text-xs shadow-2xs">
+                <span>Busca: &quot;<strong>{searchTerm}</strong>&quot;</span>
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="p-0.5 hover:bg-neutral-100 rounded-md text-text-muted hover:text-text-primary cursor-pointer"
+                  title="Remover filtro de busca"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            {selectedCategory && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-card border border-border-neutral rounded-xl font-medium text-text-primary text-xs shadow-2xs">
+                <span>Categoria: <strong>{selectedCategory}</strong></span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory('')}
+                  className="p-0.5 hover:bg-neutral-100 rounded-md text-text-muted hover:text-text-primary cursor-pointer"
+                  title="Remover filtro de categoria"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setSearchTerm('');
+                setSelectedCategory('');
+              }}
+              className="ml-auto text-tiny font-bold text-brand-600 hover:text-brand-800 underline cursor-pointer px-1 py-0.5"
+            >
+              Limpar Filtros
+            </button>
+          </div>
+        )}
 
         {/* Content View: Products Table / Cards */}
         {activeTab === 'all' ? (
-          <div>
-            {isLoading ? (
-              <div className="py-16 text-center space-y-3">
-                <RefreshCw className="w-8 h-8 animate-spin mx-auto text-brand-500" />
-                <p className="text-xs text-text-muted font-medium">Carregando catálogo de produtos...</p>
+          isLoading ? (
+            <div className="py-16 text-center space-y-3">
+              <RefreshCw className="w-8 h-8 animate-spin mx-auto text-brand-500" />
+              <p className="text-xs text-text-muted font-medium">Carregando catálogo de produtos...</p>
+            </div>
+          ) : products.length === 0 ? (
+            <div className="py-16 bg-card border border-dashed border-border-neutral rounded-3xl text-center p-8 space-y-4">
+              <Package className="w-12 h-12 mx-auto text-neutral-300" />
+              <div>
+                <h3 className="text-base font-bold text-text-primary">
+                  {searchTerm || selectedCategory
+                    ? 'Nenhum produto encontrado com os filtros aplicados'
+                    : 'Nenhum produto cadastrado'}
+                </h3>
+                <p className="text-xs text-text-muted mt-1 max-w-sm mx-auto">
+                  {searchTerm || selectedCategory
+                    ? 'Tente buscar por outro termo ou limpar os filtros para visualizar os outros produtos.'
+                    : 'Cadastre os produtos do seu mercado para controlar o estoque duplo (depósito e gôndola) e evitar gôndolas vazias.'}
+                </p>
               </div>
-            ) : products.length === 0 ? (
-              <div className="py-16 bg-card border border-dashed border-border-neutral rounded-3xl text-center p-8 space-y-4">
-                <Package className="w-12 h-12 mx-auto text-neutral-300" />
-                <div>
-                  <h3 className="text-base font-bold text-text-primary">Nenhum produto cadastrado</h3>
-                  <p className="text-xs text-text-muted mt-1 max-w-sm mx-auto">
-                    Cadastre os produtos do seu mercado para controlar o estoque duplo (depósito e gôndola) e evitar gôndolas vazias.
-                  </p>
-                </div>
+              {searchTerm || selectedCategory ? (
                 <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setSelectedCategory('');
+                  }}
+                  className="px-5 py-2.5 bg-brand-50 hover:bg-brand-100 text-brand-700 font-bold rounded-xl text-xs transition-colors border border-brand-200 inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Limpar Filtros de Busca</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
                   onClick={() => {
                     setProductToEdit(null);
                     setIsFormModalOpen(true);
@@ -533,35 +608,42 @@ export function ProductsPage() {
                   <Plus className="w-4 h-4" />
                   <span>Cadastrar Primeiro Produto</span>
                 </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {products.map((product) => {
+              )}
+            </div>
+          ) : displayMode === 'cards' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {sortedProducts.map((product) => {
                   const isCritical = product.shelfQty <= product.shelfMinQty;
                   return (
                     <div
                       key={product.id}
-                      className={`bg-card border rounded-3xl p-5 shadow-xs flex flex-col justify-between gap-4 transition-all hover:shadow-md ${
-                        isCritical ? 'border-status-warning/60 bg-status-warning-bg/10' : 'border-border-neutral'
+                      className={`bg-card border rounded-3xl p-5 shadow-xs flex flex-col justify-between gap-4 transition-all hover:shadow-md relative overflow-hidden ${
+                        isCritical
+                          ? 'border-l-6 border-l-status-warning border-y-status-warning/40 border-r-status-warning/40 bg-status-warning-bg/15'
+                          : 'border-border-neutral'
                       }`}
                     >
+                      {/* Tarja de alerta no topo do card se estiver crítico */}
+                      {isCritical && (
+                        <div className="absolute top-0 left-0 right-0 h-1 bg-status-warning" />
+                      )}
                       {/* Top Row: Barcode + Category + Status */}
                       <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <span className="font-mono text-[10px] bg-neutral-100 text-text-muted px-2 py-0.5 rounded-full font-bold">
+                        <div className="min-w-0">
+                          <span className="font-mono text-tiny bg-neutral-100 text-text-muted px-2 py-0.5 rounded-full font-bold">
                             {product.barcode}
                           </span>
                           <h4 className="font-bold text-text-primary text-sm mt-1 line-clamp-1">
                             {product.name}
                           </h4>
                           {product.category && (
-                            <span className="text-[11px] text-text-muted">{product.category}</span>
+                            <span className="text-tiny text-text-muted font-medium block mt-0.5">{product.category}</span>
                           )}
                         </div>
 
                         {/* Price Badge */}
                         {product.price !== undefined && product.price !== null && (
-                          <span className="text-xs font-mono font-extrabold text-text-primary bg-canvas border border-border-neutral px-2 py-1 rounded-xl shrink-0">
+                          <span className="text-xs font-mono font-bold text-text-primary bg-canvas border border-border-neutral px-2 py-0.5 rounded-xl shrink-0">
                             {new Intl.NumberFormat('pt-BR', {
                               style: 'currency',
                               currency: 'BRL',
@@ -570,97 +652,109 @@ export function ProductsPage() {
                         )}
                       </div>
 
-                      {/* Stock Double Badge Grid */}
-                      <div className="grid grid-cols-2 gap-2 bg-canvas p-3 rounded-2xl border border-border-neutral text-xs">
+                      {/* Stock Double Badge Grid com text-tiny */}
+                      <div className="grid grid-cols-2 gap-2 bg-canvas p-2.5 rounded-2xl border border-border-neutral">
                         {/* Deposito */}
                         <div className="space-y-0.5">
-                          <span className="text-[10px] text-text-muted font-bold block">
+                          <span className="text-tiny text-text-muted font-bold block">
                             Depósito
                           </span>
-                          <p className="font-mono font-bold text-text-primary">
+                          <p className="font-mono font-bold text-text-primary text-sm">
                             {product.depotQty}{' '}
-                            <span className="text-[10px] font-normal text-text-muted">un</span>
+                            <span className="text-tiny font-normal text-text-muted">un</span>
                           </p>
                           {product.depotLocation && (
-                            <p className="text-[10px] text-text-muted truncate">{product.depotLocation}</p>
+                            <p className="text-tiny text-text-muted truncate">{product.depotLocation}</p>
                           )}
                         </div>
 
                         {/* Gondola */}
                         <div className="space-y-0.5">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-brand-800 font-bold block">Gôndola</span>
+                            <span className="text-tiny text-brand-800 font-bold block">Gôndola</span>
                             {isCritical && (
-                              <span className="text-[9px] bg-status-warning text-white font-extrabold px-1.5 py-0.2 rounded-full">
-                                Crítico
+                              <span className="text-tiny bg-status-warning text-white font-bold px-1.5 py-0.2 rounded-full">
+                                Repor
                               </span>
                             )}
                           </div>
                           <p
-                            className={`font-mono font-bold ${
+                            className={`font-mono font-bold text-sm ${
                               isCritical ? 'text-status-warning' : 'text-status-success'
                             }`}
                           >
                             {product.shelfQty}{' '}
-                            <span className="text-[10px] font-normal text-text-muted">
+                            <span className="text-tiny font-normal text-text-muted">
                               / min {product.shelfMinQty}
                             </span>
                           </p>
                           {product.shelfLocation && (
-                            <p className="text-[10px] text-text-muted truncate">{product.shelfLocation}</p>
+                            <p className="text-tiny text-text-muted truncate">{product.shelfLocation}</p>
                           )}
                         </div>
                       </div>
 
-                      {/* Action buttons */}
+                      {/* Action buttons com touch targets mínimos 44px */}
                       <div className="flex items-center justify-between pt-2 border-t border-border-neutral gap-2">
                         {/* Transfer Reposition Button */}
+                        {/* Transfer Reposition Button com destaque para itens críticos */}
                         <button
+                          type="button"
                           onClick={() => {
                             setSelectedProduct(product);
                             setIsTransferModalOpen(true);
                           }}
                           disabled={product.depotQty <= 0}
-                          className="flex-1 py-2 px-3 bg-brand-50 hover:bg-brand-100 text-brand-600 border border-brand-100 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                          className={`flex-1 min-h-[44px] py-2 px-3.5 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                            isCritical && product.depotQty > 0
+                              ? 'bg-brand-600 hover:bg-brand-700 text-white shadow-sm ring-2 ring-brand-500/30'
+                              : 'bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200'
+                          }`}
                           title="Transferir do Depósito para Gôndola"
                         >
-                          <ArrowRightLeft className="w-3.5 h-3.5" />
-                          <span>Repor Gôndola</span>
+                          <ArrowRightLeft className="w-4 h-4" />
+                          <span>{isCritical ? 'Repor Agora' : 'Repor Gôndola'}</span>
                         </button>
 
                         {/* Edit Button */}
                         <button
+                          type="button"
                           onClick={() => {
                             setProductToEdit(product);
                             setIsFormModalOpen(true);
                           }}
-                          className="p-2 text-text-muted hover:text-text-primary hover:bg-neutral-100 border border-border-neutral rounded-xl transition-colors cursor-pointer"
+                          className="min-w-[44px] min-h-[44px] flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-neutral-100 border border-border-neutral rounded-xl transition-colors cursor-pointer"
                           title="Editar Informações"
+                          aria-label="Editar Produto"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
 
                         {/* Delete Button */}
                         {deleteConfirmId === product.id ? (
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 min-h-[44px]">
                             <button
+                              type="button"
                               onClick={() => handleDeleteProduct(product.id)}
-                              className="px-2 py-1 bg-status-danger text-white rounded-lg font-bold text-[10px]"
+                              className="min-h-[44px] px-3 bg-status-danger text-white rounded-xl font-bold text-xs"
                             >
-                              Confirmar
+                              Sim
                             </button>
                             <button
+                              type="button"
                               onClick={() => setDeleteConfirmId(null)}
-                              className="px-2 py-1 bg-neutral-200 text-text-primary rounded-lg font-bold text-[10px]"
+                              className="min-h-[44px] px-3 bg-neutral-200 text-text-primary rounded-xl font-bold text-xs"
                             >
-                              X
+                              Não
                             </button>
                           </div>
                         ) : (
                           <button
+                            type="button"
                             onClick={() => setDeleteConfirmId(product.id)}
-                            className="p-2 text-text-muted hover:text-status-danger hover:bg-neutral-100 border border-border-neutral rounded-xl transition-colors cursor-pointer"
+                            className="min-w-[44px] min-h-[44px] flex items-center justify-center text-text-muted hover:text-status-danger hover:bg-status-danger-bg border border-border-neutral rounded-xl transition-colors cursor-pointer"
                             title="Excluir Produto"
+                            aria-label="Excluir Produto"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -670,9 +764,163 @@ export function ProductsPage() {
                   );
                 })}
               </div>
-            )}
-          </div>
-        ) : (
+            ) : (
+              /* View em Tabela Compacta com Ordenação */
+              <div className="bg-card border border-border-neutral rounded-3xl overflow-hidden shadow-xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-canvas border-b border-border-neutral text-text-muted font-bold text-xs uppercase tracking-wider">
+                        <th
+                          onClick={() => handleSort('name')}
+                          className="py-3.5 px-4 cursor-pointer hover:text-text-primary select-none"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span>Produto</span>
+                            {sortField === 'name' ? (
+                              sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />
+                            ) : (
+                              <ArrowUpDown className="w-3.5 h-3.5 opacity-40" />
+                            )}
+                          </div>
+                        </th>
+                        <th
+                          onClick={() => handleSort('category')}
+                          className="py-3.5 px-4 cursor-pointer hover:text-text-primary select-none hidden md:table-cell"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span>Categoria</span>
+                            {sortField === 'category' ? (
+                              sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />
+                            ) : (
+                              <ArrowUpDown className="w-3.5 h-3.5 opacity-40" />
+                            )}
+                          </div>
+                        </th>
+                        <th
+                          onClick={() => handleSort('depotQty')}
+                          className="py-3.5 px-4 cursor-pointer hover:text-text-primary select-none text-right"
+                        >
+                          <div className="flex items-center justify-end gap-1.5">
+                            <span>Depósito</span>
+                            {sortField === 'depotQty' ? (
+                              sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />
+                            ) : (
+                              <ArrowUpDown className="w-3.5 h-3.5 opacity-40" />
+                            )}
+                          </div>
+                        </th>
+                        <th
+                          onClick={() => handleSort('shelfQty')}
+                          className="py-3.5 px-4 cursor-pointer hover:text-text-primary select-none text-right"
+                        >
+                          <div className="flex items-center justify-end gap-1.5">
+                            <span>Gôndola</span>
+                            {sortField === 'shelfQty' ? (
+                              sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />
+                            ) : (
+                              <ArrowUpDown className="w-3.5 h-3.5 opacity-40" />
+                            )}
+                          </div>
+                        </th>
+                        <th
+                          onClick={() => handleSort('price')}
+                          className="py-3.5 px-4 cursor-pointer hover:text-text-primary select-none text-right hidden sm:table-cell"
+                        >
+                          <div className="flex items-center justify-end gap-1.5">
+                            <span>Preço</span>
+                            {sortField === 'price' ? (
+                              sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />
+                            ) : (
+                              <ArrowUpDown className="w-3.5 h-3.5 opacity-40" />
+                            )}
+                          </div>
+                        </th>
+                        <th className="py-3.5 px-4 text-center">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border-neutral">
+                      {sortedProducts.map((product) => {
+                        const isCritical = product.shelfQty <= product.shelfMinQty;
+                        return (
+                          <tr
+                            key={product.id}
+                            className={`hover:bg-canvas/60 transition-colors ${
+                              isCritical ? 'bg-status-warning-bg/25 border-l-4 border-l-status-warning' : ''
+                            }`}
+                          >
+                            <td className="py-3 px-4">
+                              <div>
+                                <p className="font-bold text-text-primary text-xs">{product.name}</p>
+                                <p className="font-mono text-tiny text-text-muted">{product.barcode}</p>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-text-muted text-tiny font-medium hidden md:table-cell">
+                              {product.category || '-'}
+                            </td>
+                            <td className="py-3 px-4 text-right font-mono font-bold text-xs text-text-primary">
+                              {product.depotQty} un
+                            </td>
+                            <td className="py-3 px-4 text-right font-mono font-bold text-xs">
+                              <span className={isCritical ? 'text-status-warning' : 'text-status-success'}>
+                                {product.shelfQty}
+                              </span>
+                              <span className="text-tiny text-text-muted font-normal"> / {product.shelfMinQty}</span>
+                            </td>
+                            <td className="py-3 px-4 text-right font-mono font-bold text-xs text-text-primary hidden sm:table-cell">
+                              {product.price !== undefined && product.price !== null
+                                ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(product.price))
+                                : '-'}
+                            </td>
+                            <td className="py-2.5 px-4">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedProduct(product);
+                                    setIsTransferModalOpen(true);
+                                  }}
+                                  disabled={product.depotQty <= 0}
+                                  className={`min-w-[40px] min-h-[40px] px-3 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                                    isCritical && product.depotQty > 0
+                                      ? 'bg-brand-600 hover:bg-brand-700 text-white shadow-2xs'
+                                      : 'bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200/80'
+                                  }`}
+                                  title="Repor Gôndola"
+                                >
+                                  <ArrowRightLeft className="w-4 h-4" />
+                                  <span className="hidden xl:inline">{isCritical ? 'Repor Agora' : 'Repor'}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setProductToEdit(product);
+                                    setIsFormModalOpen(true);
+                                  }}
+                                  className="min-w-[40px] min-h-[40px] flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-neutral-100 rounded-xl transition-colors cursor-pointer"
+                                  title="Editar"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteProduct(product.id)}
+                                  className="min-w-[40px] min-h-[40px] flex items-center justify-center text-text-muted hover:text-status-danger hover:bg-status-danger-bg rounded-xl transition-colors cursor-pointer"
+                                  title="Excluir"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          ) : (
           /* View Tab: Critical Products Dashboard */
           <div className="space-y-4">
             <div className="p-4 bg-status-warning-bg/50 border border-status-warning/40 rounded-2xl text-xs space-y-1">
@@ -710,54 +958,55 @@ export function ProductsPage() {
                   >
                     <div>
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-mono text-[10px] bg-status-warning-bg text-status-warning border border-status-warning/30 px-2 py-0.5 rounded-full font-extrabold">
+                        <span className="font-mono text-tiny bg-status-warning-bg text-status-warning border border-status-warning/30 px-2 py-0.5 rounded-full font-bold">
                           Déficit: {product.deficit} un ({Math.round(product.deficitPercentage)}%)
                         </span>
-                        <span className="text-[10px] font-mono text-text-muted">{product.barcode}</span>
+                        <span className="text-tiny font-mono text-text-muted font-bold">{product.barcode}</span>
                       </div>
-                      <h4 className="font-bold text-text-primary text-sm mt-2">{product.name}</h4>
+                      <h4 className="font-bold text-text-primary text-sm mt-1.5">{product.name}</h4>
                       {product.category && (
-                        <span className="text-[11px] text-text-muted">{product.category}</span>
+                        <span className="text-tiny text-text-muted font-medium">{product.category}</span>
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 bg-canvas p-3 rounded-2xl border border-border-neutral text-xs">
+                    <div className="grid grid-cols-2 gap-2 bg-canvas p-2.5 rounded-2xl border border-border-neutral">
                       <div>
-                        <span className="text-[10px] text-text-muted font-bold block">
+                        <span className="text-tiny text-text-muted font-bold block">
                           Disponível no Depósito
                         </span>
-                        <p className="font-mono font-extrabold text-text-primary">
+                        <p className="font-mono font-bold text-sm text-text-primary">
                           {product.depotQty} un
                         </p>
                         {product.depotLocation && (
-                          <p className="text-[10px] text-text-muted truncate">{product.depotLocation}</p>
+                          <p className="text-tiny text-text-muted truncate">{product.depotLocation}</p>
                         )}
                       </div>
                       <div>
-                        <span className="text-[10px] text-status-warning font-bold block">
+                        <span className="text-tiny text-status-warning font-bold block">
                           Gôndola Atual
                         </span>
-                        <p className="font-mono font-extrabold text-status-warning">
+                        <p className="font-mono font-bold text-sm text-status-warning">
                           {product.shelfQty} / min {product.shelfMinQty}
                         </p>
                         {product.shelfLocation && (
-                          <p className="text-[10px] text-text-muted truncate">{product.shelfLocation}</p>
+                          <p className="text-tiny text-text-muted truncate">{product.shelfLocation}</p>
                         )}
                       </div>
                     </div>
 
                     <button
+                      type="button"
                       onClick={() => {
                         setSelectedProduct(product);
                         setIsTransferModalOpen(true);
                       }}
                       disabled={product.depotQty <= 0}
-                      className="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-colors shadow-md cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="w-full min-h-[44px] py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 transition-colors shadow-md cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <ArrowRightLeft className="w-4 h-4" />
                       <span>
                         {product.depotQty > 0
-                          ? `Repor Gôndola Agora (${product.depotQty} disponíveis)`
+                          ? `Repor Gôndola Agora (${product.depotQty} un)`
                           : 'Sem saldo no depósito para repor'}
                       </span>
                     </button>
@@ -767,9 +1016,8 @@ export function ProductsPage() {
             )}
           </div>
         )}
-      </main>
 
-      {/* Modals */}
+      {/* Modais */}
       <ProductFormModal
         isOpen={isFormModalOpen}
         onClose={() => {
