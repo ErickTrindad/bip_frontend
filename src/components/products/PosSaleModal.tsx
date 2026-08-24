@@ -12,9 +12,13 @@ import {
   Banknote,
   QrCode,
   Keyboard,
+  Maximize2,
+  Minimize2,
+  Smartphone,
 } from 'lucide-react';
+import { RemoteScannerPairModal } from './RemoteScannerPairModal';
 import type { Product, PosSaleItem, PaymentMethod, PosSaleResponse } from '../../types/product';
-import { productService } from '../../services/productService';
+import { saleService } from '../../services/saleService';
 import { ApiError } from '../../services/api';
 
 interface PosSaleModalProps {
@@ -44,6 +48,8 @@ export function PosSaleModal({
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successResult, setSuccessResult] = useState<PosSaleResponse | null>(null);
+  const [isMaximized, setIsMaximized] = useState(false);
+  const [isRemotePairModalOpen, setIsRemotePairModalOpen] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
@@ -237,7 +243,7 @@ export function PosSaleModal({
               }))
             : undefined,
       };
-      const res = await productService.registerPosSale(payload);
+      const res = await saleService.create(payload);
       setSuccessResult(res);
       onSuccess(res);
     } catch (err: unknown) {
@@ -309,14 +315,21 @@ export function PosSaleModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-xs animate-fade-in">
-      <div className="w-full max-w-2xl bg-card border border-border-neutral rounded-3xl p-4 sm:p-6 shadow-2xl relative my-auto max-h-[96vh] sm:max-h-[90vh] flex flex-col overflow-hidden">
+    <>
+    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs animate-fade-in ${
+      isMaximized ? 'p-0' : 'p-2 sm:p-4'
+    }`}>
+      <div className={`w-full bg-card border border-border-neutral shadow-2xl relative flex flex-col overflow-hidden transition-all duration-200 ${
+        isMaximized
+          ? 'max-w-none h-full rounded-none p-3 sm:p-6'
+          : 'max-w-2xl rounded-3xl p-3.5 sm:p-6 my-auto max-h-[96vh] sm:max-h-[90vh]'
+      }`}>
         {/* Header Fixo */}
-        <div className="flex items-center justify-between pb-2.5 border-b border-border-neutral mb-3 shrink-0">
+        <div className="flex items-center justify-between pb-2 border-b border-border-neutral mb-2.5 shrink-0">
           <div className="flex items-center gap-2 text-brand-600 font-bold">
             <ShoppingCart className="w-5 h-5" />
             <div>
-              <h3 className="text-base text-text-primary font-bold">
+              <h3 className="text-sm sm:text-base text-text-primary font-bold">
                 Frente de Caixa (PDV)
               </h3>
               <p className="text-tiny text-text-muted hidden sm:block">
@@ -324,16 +337,29 @@ export function PosSaleModal({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleResetAndClose}
-            className="p-2 text-text-muted hover:text-text-primary hover:bg-neutral-100 rounded-xl transition-colors cursor-pointer"
-            title="Fechar (Esc)"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setIsMaximized((prev) => !prev)}
+              className="p-1.5 sm:p-2 text-text-muted hover:text-text-primary hover:bg-neutral-100 rounded-xl transition-colors cursor-pointer"
+              title={isMaximized ? 'Restaurar tamanho' : 'Expandir tela cheia'}
+            >
+              {isMaximized ? (
+                <Minimize2 className="w-4 h-4 sm:w-5 sm:h-5" />
+              ) : (
+                <Maximize2 className="w-4 h-4 sm:w-5 sm:h-5" />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={handleResetAndClose}
+              className="p-1.5 sm:p-2 text-text-muted hover:text-text-primary hover:bg-neutral-100 rounded-xl transition-colors cursor-pointer"
+              title="Fechar (Esc)"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
-        {/* Success View */}
         {successResult ? (
           <div className="py-6 flex flex-col items-center justify-center text-center space-y-4 text-xs">
             <div className="w-14 h-14 bg-status-success-bg text-status-success rounded-full flex items-center justify-center border border-status-success/30 shadow-inner">
@@ -392,7 +418,7 @@ export function PosSaleModal({
                   <kbd className="px-1 py-0.2 bg-card border border-border-neutral rounded text-tiny font-bold">F2</kbd> focar
                 </span>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <div className="relative flex-1">
                   <input
                     ref={barcodeInputRef}
@@ -439,27 +465,31 @@ export function PosSaleModal({
                         handleAddItemByBarcode(barcodeInput, quantityInput);
                       }
                     }}
-                    placeholder="Bipar código... (Enter confirma)"
-                    className="w-full h-10 px-3 bg-card border border-border-neutral rounded-xl text-text-primary text-xs focus:outline-none focus:border-brand-500 font-mono font-semibold"
+                    placeholder="Bipar ou digitar nome/código... (Enter confirma)"
+                    className="w-full h-10 px-3 bg-card border border-border-neutral rounded-xl text-text-primary text-xs focus:outline-none focus:border-brand-500 font-medium"
                   />
 
                   {/* Lista de sugestões / busca em tempo real */}
                   {showSuggestions && filteredSuggestions.length > 0 && (
-                    <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border-neutral rounded-2xl shadow-xl z-50 overflow-hidden divide-y divide-border-neutral max-h-56 overflow-y-auto animate-fadeIn">
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border-neutral rounded-2xl shadow-xl z-50 overflow-hidden divide-y divide-border-neutral max-h-60 overflow-y-auto animate-fadeIn">
                       {filteredSuggestions.map((prod, idx) => (
                         <button
                           key={prod.id}
                           type="button"
                           onClick={() => handleAddProductItem(prod, quantityInput)}
-                          className={`w-full p-2.5 text-left flex items-center justify-between gap-2 transition-colors cursor-pointer text-xs ${
+                          className={`w-full p-2.5 text-left flex items-start sm:items-center justify-between gap-2.5 transition-colors cursor-pointer text-xs ${
                             selectedSuggestionIndex === idx
-                              ? 'bg-brand-50/80 text-brand-900'
+                              ? 'bg-brand-50/90 text-brand-900'
                               : 'hover:bg-canvas text-text-primary'
                           }`}
                         >
                           <div className="min-w-0 flex-1">
-                            <p className="font-bold truncate text-xs">{prod.name}</p>
-                            <p className="text-tiny font-mono text-text-muted">{prod.barcode} {prod.category ? `• ${prod.category}` : ''}</p>
+                            <p className="font-bold text-xs text-text-primary break-words leading-tight">
+                              {prod.name}
+                            </p>
+                            <p className="text-tiny font-mono text-text-muted mt-0.5">
+                              {prod.barcode} {prod.category ? `• ${prod.category}` : ''}
+                            </p>
                           </div>
                           <div className="text-right shrink-0">
                             <span className="font-mono font-bold text-xs text-brand-600 block">
@@ -476,33 +506,44 @@ export function PosSaleModal({
                     </div>
                   )}
                 </div>
-                <input
-                  type="number"
-                  min="1"
-                  value={quantityInput}
-                  onChange={(e) => setQuantityInput(parseInt(e.target.value) || 1)}
-                  className="w-16 h-10 px-2 bg-card border border-border-neutral rounded-xl text-text-primary text-xs text-center font-mono font-bold"
-                  title="Quantidade"
-                />
-                <button
-                  type="button"
-                  onClick={() => handleAddItemByBarcode(barcodeInput, quantityInput)}
-                  className="h-10 px-3.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-xs transition-colors cursor-pointer shrink-0 flex items-center justify-center gap-1"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Adicionar</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={onOpenScanner}
-                  title="Abrir Câmera para Escanear"
-                  className="h-10 px-2.5 bg-card hover:bg-neutral-100 border border-border-neutral text-text-primary rounded-xl transition-colors cursor-pointer shrink-0 flex items-center justify-center"
-                >
-                  <Barcode className="w-4 h-4 text-brand-600" />
-                </button>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <input
+                    type="number"
+                    min="1"
+                    value={quantityInput}
+                    onChange={(e) => setQuantityInput(parseInt(e.target.value) || 1)}
+                    className="w-14 sm:w-16 h-10 px-1.5 bg-card border border-border-neutral rounded-xl text-text-primary text-xs text-center font-mono font-bold"
+                    title="Quantidade"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddItemByBarcode(barcodeInput, quantityInput)}
+                    className="flex-1 sm:flex-initial h-10 px-3.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Adicionar</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onOpenScanner}
+                    title="Abrir Câmera do Computador"
+                    className="h-10 px-2.5 bg-card hover:bg-neutral-100 border border-border-neutral text-text-primary rounded-xl transition-colors cursor-pointer flex items-center justify-center"
+                  >
+                    <Barcode className="w-4 h-4 text-brand-600" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsRemotePairModalOpen(true)}
+                    title="Conectar Câmera do Celular via QR Code"
+                    className="h-10 px-2.5 sm:px-3 bg-brand-50 hover:bg-brand-100 border border-brand-200 text-brand-700 rounded-xl font-bold transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
+                  >
+                    <Smartphone className="w-4 h-4 text-brand-600" />
+                    <span className="hidden sm:inline text-tiny font-bold">Bipador Celular</span>
+                  </button>
+                </div>
               </div>
             </div>
-            {/* Cesta de Produtos com scroll interno flexível */}
             <div className="flex flex-col flex-1 min-h-[140px] max-h-[30vh] sm:max-h-[36vh] border border-border-neutral rounded-2xl bg-canvas overflow-hidden">
               <div className="flex items-center justify-between text-tiny font-bold text-text-muted px-3 py-2 border-b border-border-neutral bg-card shrink-0">
                 <span>Cesta de Produtos ({items.length})</span>
@@ -704,5 +745,15 @@ export function PosSaleModal({
         )}
       </div>
     </div>
+
+    {/* Modal de Pareamento Remoto via QR Code */}
+    <RemoteScannerPairModal
+      isOpen={isRemotePairModalOpen}
+      onClose={() => setIsRemotePairModalOpen(false)}
+      onBarcodeReceived={(barcode) => {
+        handleAddItemByBarcode(barcode, 1);
+      }}
+    />
+    </>
   );
 }

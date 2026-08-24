@@ -135,7 +135,7 @@ export function AiPage() {
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto p-4 md:p-6 flex flex-col gap-6">
+    <div className="w-full flex flex-col gap-6">
         {/* Banner Informativo */}
         <div className="bg-gradient-to-r from-brand-50 to-orange-50/30 border border-brand-100 rounded-2xl p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-start gap-3.5">

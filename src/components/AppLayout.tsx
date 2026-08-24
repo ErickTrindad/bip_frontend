@@ -3,8 +3,10 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Package,
   ShoppingCart,
+  Receipt,
   TrendingDown,
   Sparkles,
+  BarChart3,
   Store,
   Wifi,
   WifiOff,
@@ -72,11 +74,25 @@ export function AppLayout({ children }: AppLayoutProps) {
       icon: ShoppingCart,
     },
     {
+      id: 'sales',
+      label: 'Histórico de Vendas',
+      shortLabel: 'Vendas',
+      path: '/sales',
+      icon: Receipt,
+    },
+    {
       id: 'critical',
       label: 'Reposição Urgente',
       shortLabel: 'Reposição',
       path: '/products?tab=critical',
       icon: TrendingDown,
+    },
+    {
+      id: 'reports',
+      label: 'Relatórios & BI',
+      shortLabel: 'Relatórios',
+      path: '/reports',
+      icon: BarChart3,
     },
     {
       id: 'ai',
@@ -86,7 +102,6 @@ export function AppLayout({ children }: AppLayoutProps) {
       icon: Sparkles,
     },
   ];
-
   const handleNavClick = (path: string) => {
     navigate(path);
   };
@@ -283,7 +298,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </header>
 
         {/* Conteúdo da Página */}
-        <main className="flex-1 w-full">{children}</main>
+        <main className="flex-1 w-full p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">{children}</main>
       </div>
 
       {/* Bottom Navigation Bar Mobile */}

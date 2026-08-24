@@ -315,7 +315,7 @@ export function ProductsPage() {
   const categories = availableCategories.slice().sort((a, b) => a.localeCompare(b));
 
   return (
-    <div className="max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8 space-y-6">
+    <div className="w-full space-y-6">
       {/* Feedback Alert */}
         {feedbackMessage && (
           <div
