@@ -16,8 +16,12 @@ import {
   Minimize2,
   Smartphone,
 } from 'lucide-react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
+import { supabase } from '../../lib/supabase';
+import { playBeepSound } from '../../lib/sound';
 import { RemoteScannerPairModal } from './RemoteScannerPairModal';
 import type { Product, PosSaleItem, PaymentMethod, PosSaleResponse } from '../../types/product';
+import type { PosPairingSession, RemoteBarcodePayload } from '../../types/posSession';
 import { saleService } from '../../services/saleService';
 import { ApiError } from '../../services/api';
 
@@ -50,10 +54,13 @@ export function PosSaleModal({
   const [successResult, setSuccessResult] = useState<PosSaleResponse | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const [isRemotePairModalOpen, setIsRemotePairModalOpen] = useState(false);
+  const [remoteSession, setRemoteSession] = useState<PosPairingSession | null>(null);
+  const [isPhoneConnected, setIsPhoneConnected] = useState<boolean>(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
+  const activeChannelRef = useRef<RealtimeChannel | null>(null);
   useEffect(() => {
     if (isOpen && scannedBarcode) {
       handleAddItemByBarcode(scannedBarcode, 1);
@@ -106,6 +113,61 @@ export function PosSaleModal({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Conexão ao Canal Realtime Supabase Broadcast para o Scanner Remoto
+  const connectRemoteScanner = (session: PosPairingSession) => {
+    setRemoteSession(session);
+
+    if (activeChannelRef.current) {
+      supabase.removeChannel(activeChannelRef.current);
+    }
+
+    const channel = supabase.channel(session.channel, {
+      config: { broadcast: { self: false } },
+    });
+
+    channel
+      .on('broadcast', { event: 'device-connected' }, () => {
+        setIsPhoneConnected(true);
+        playBeepSound(1600, 0.12);
+        // Fecha o modal do QR Code automaticamente após 1 segundo
+        setTimeout(() => setIsRemotePairModalOpen(false), 1000);
+      })
+      .on('broadcast', { event: 'device-disconnected' }, () => {
+        setIsPhoneConnected(false);
+      })
+      .on('broadcast', { event: 'barcode-scanned' }, (event) => {
+        const payload = event.payload as RemoteBarcodePayload;
+        if (payload?.barcode) {
+          setIsPhoneConnected(true);
+          playBeepSound(1400, 0.08);
+          // Incrementa quantidade ou insere o produto
+          handleAddItemByBarcode(payload.barcode, 1);
+        }
+      })
+      .subscribe();
+
+    activeChannelRef.current = channel;
+  };
+
+  // Desconecta o canal Realtime quando o PDV for fechado
+  useEffect(() => {
+    if (!isOpen) {
+      if (activeChannelRef.current) {
+        supabase.removeChannel(activeChannelRef.current);
+        activeChannelRef.current = null;
+      }
+      setIsPhoneConnected(false);
+      setRemoteSession(null);
+    }
+
+    return () => {
+      if (activeChannelRef.current) {
+        supabase.removeChannel(activeChannelRef.current);
+        activeChannelRef.current = null;
+      }
+    };
+  }, [isOpen]);
 
   // Filtra produtos em tempo real por nome ou código de barras
   const filteredSuggestions = barcodeInput.trim().length > 0
@@ -304,6 +366,12 @@ export function PosSaleModal({
     executeSale();
   };
   const handleResetAndClose = () => {
+    if (activeChannelRef.current) {
+      supabase.removeChannel(activeChannelRef.current);
+      activeChannelRef.current = null;
+    }
+    setIsPhoneConnected(false);
+    setRemoteSession(null);
     setItems([]);
     setSelectedMethods(['PIX']);
     setSplitAmounts({});
@@ -535,11 +603,24 @@ export function PosSaleModal({
                   <button
                     type="button"
                     onClick={() => setIsRemotePairModalOpen(true)}
-                    title="Conectar Câmera do Celular via QR Code"
-                    className="h-10 px-2.5 sm:px-3 bg-brand-50 hover:bg-brand-100 border border-brand-200 text-brand-700 rounded-xl font-bold transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
+                    title={isPhoneConnected ? 'Celular Pareado (Pronto para Bipar)' : 'Conectar Câmera do Celular via QR Code'}
+                    className={`h-10 px-2.5 sm:px-3 border rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                      isPhoneConnected
+                        ? 'bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-800 shadow-2xs'
+                        : 'bg-brand-50 hover:bg-brand-100 border-brand-200 text-brand-700'
+                    }`}
                   >
-                    <Smartphone className="w-4 h-4 text-brand-600" />
-                    <span className="hidden sm:inline text-tiny font-bold">Bipador Celular</span>
+                    <Smartphone className={`w-4 h-4 ${isPhoneConnected ? 'text-emerald-600' : 'text-brand-600'}`} />
+                    <span className="hidden sm:inline text-tiny font-bold flex items-center gap-1">
+                      {isPhoneConnected ? (
+                        <>
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <span>Celular Pareado</span>
+                        </>
+                      ) : (
+                        'Bipador Celular'
+                      )}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -750,9 +831,9 @@ export function PosSaleModal({
     <RemoteScannerPairModal
       isOpen={isRemotePairModalOpen}
       onClose={() => setIsRemotePairModalOpen(false)}
-      onBarcodeReceived={(barcode) => {
-        handleAddItemByBarcode(barcode, 1);
-      }}
+      session={remoteSession}
+      onSessionCreated={connectRemoteScanner}
+      isPhoneConnected={isPhoneConnected}
     />
     </>
   );

@@ -28,6 +28,7 @@ declare global {
 
 export function RemoteScannerPage() {
   const [searchParams] = useSearchParams();
+
   const sessionId = searchParams.get('session');
   const token = searchParams.get('token');
 
@@ -125,7 +126,7 @@ export function RemoteScannerPage() {
     };
   }, [sessionId, token]);
 
-  // 2. Despacho do Código de Barras Detectado
+  // 2. Despacho do Código de Barras Detectado com Debounce Ágil (600ms)
   const handleBarcodeDetected = useCallback((barcode: string) => {
     const trimmed = barcode.trim();
     if (!trimmed || trimmed.length < 3) return;
@@ -133,17 +134,17 @@ export function RemoteScannerPage() {
     const now = Date.now();
     const lastSeen = lastScannedTimeMapRef.current.get(trimmed) || 0;
 
-    // Debounce / Throttle de 1,5 segundos para o mesmo código para evitar disparos acidentais múltiplos
-    if (now - lastSeen < 1500) {
+    // Debounce / Throttle ágil de 600ms para permitir bipar repetidas vezes o mesmo item rapidamente
+    if (now - lastSeen < 600) {
       return;
     }
 
     lastScannedTimeMapRef.current.set(trimmed, now);
 
-    // Feedback tátil no mobile
+    // Feedback tátil imediato no celular
     if (navigator.vibrate) {
       try {
-        navigator.vibrate([80]);
+        navigator.vibrate([60]);
       } catch (e) {
         console.warn('Vibration API error:', e);
       }
@@ -154,7 +155,7 @@ export function RemoteScannerPage() {
 
     // Flash visual na tela
     setScanFlash(true);
-    setTimeout(() => setScanFlash(false), 250);
+    setTimeout(() => setScanFlash(false), 200);
 
     setLastScannedBarcode(trimmed);
     setScannedCount((prev) => prev + 1);
@@ -283,7 +284,7 @@ export function RemoteScannerPage() {
         nativeDetector = new BarcodeDetector({
           formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code', 'itf'],
         });
-      } catch (e) {
+      } catch {
         nativeDetector = null;
       }
     }
