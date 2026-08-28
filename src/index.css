@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 @theme {
+  --font-sans: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
   --color-brand-50: #FFF7ED;
   --color-brand-100: #FFEDD5;
   --color-brand-500: #F97316;
@@ -22,6 +23,16 @@
   --color-status-danger-bg: #FEF2F2;
 
   --font-size-tiny: 10px;
+}
+
+@layer base {
+  html, body {
+    font-family: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  input, button, textarea, select {
+    font-family: inherit;
+  }
 }
 
 @utility text-tiny {

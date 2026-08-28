@@ -14,7 +14,7 @@ export class ApiError extends Error {
 
 export async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
-  const token = localStorage.getItem('@gopme:token');
+  const token = localStorage.getItem('@bip:token');
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',

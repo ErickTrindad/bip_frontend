@@ -78,7 +78,8 @@ export interface VoiceActionItem {
 }
 
 export interface VoiceCommandPayload {
-  audioBase64: string;
+  audioBase64?: string;
+  prompt?: string;
   filename?: string;
   systemPrompt?: string;
   autoExecute?: boolean;

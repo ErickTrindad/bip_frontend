@@ -13,7 +13,7 @@ export function HomePage() {
         </div>
 
         <div>
-          <h1 className="text-4xl font-extrabold text-brand-600 tracking-tight">GO PME</h1>
+          <h1 className="text-4xl font-extrabold text-brand-600 tracking-tight lowercase">bip</h1>
           <p className="text-sm text-text-muted mt-2 font-medium">
             Controle de estoque e reposição de gôndolas offline-first
           </p>

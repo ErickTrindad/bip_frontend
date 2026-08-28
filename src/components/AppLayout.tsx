@@ -27,14 +27,14 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    const saved = localStorage.getItem('@gopme:sidebar_collapsed');
+    const saved = localStorage.getItem('@bip:sidebar_collapsed');
     return saved ? JSON.parse(saved) : false;
   });
 
   const toggleSidebar = () => {
     setIsSidebarCollapsed((prev: boolean) => {
       const next = !prev;
-      localStorage.setItem('@gopme:sidebar_collapsed', JSON.stringify(next));
+      localStorage.setItem('@bip:sidebar_collapsed', JSON.stringify(next));
       return next;
     });
   };
@@ -142,7 +142,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               className={`flex items-center gap-3 cursor-pointer select-none min-w-0 ${
                 isSidebarCollapsed ? 'justify-center w-full' : ''
               }`}
-              title={isSidebarCollapsed ? 'GO PME' : undefined}
+              title={isSidebarCollapsed ? 'bip' : undefined}
             >
               <div className="p-2.5 bg-brand-50 text-brand-600 rounded-2xl border border-brand-100 flex items-center justify-center shadow-xs shrink-0">
                 <Store className="w-6 h-6" />
@@ -150,8 +150,8 @@ export function AppLayout({ children }: AppLayoutProps) {
               {!isSidebarCollapsed && (
                 <div className="overflow-hidden min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-extrabold text-brand-600 tracking-tight text-lg truncate">
-                      GO PME
+                    <span className="font-extrabold text-brand-600 tracking-tight text-lg truncate lowercase">
+                      bip
                     </span>
                   </div>
                   <p className="text-tiny text-text-muted font-medium truncate max-w-[110px]">
@@ -233,7 +233,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   {user?.name || 'Lojista'}
                 </span>
                 <span className="text-tiny text-text-muted truncate">
-                  {user?.email || 'conta@gopme.com'}
+                  {user?.email || 'conta@bip.com'}
                 </span>
               </div>
             )}

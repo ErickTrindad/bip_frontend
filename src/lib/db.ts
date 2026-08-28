@@ -5,7 +5,7 @@ export interface LocalProduct extends Product {
   synced?: boolean;
 }
 
-const db = new Dexie('GoPMEDatabase') as Dexie & {
+const db = new Dexie('bipDatabase') as Dexie & {
   products: EntityTable<LocalProduct, 'id'>;
 };
 

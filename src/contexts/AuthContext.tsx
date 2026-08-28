@@ -9,24 +9,24 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('@gopme:user');
+    const saved = localStorage.getItem('@bip:user');
     return saved ? JSON.parse(saved) : null;
   });
   const [tenant, setTenant] = useState<Tenant | null>(() => {
-    const saved = localStorage.getItem('@gopme:tenant');
+    const saved = localStorage.getItem('@bip:tenant');
     return saved ? JSON.parse(saved) : null;
   });
   const [session, setSession] = useState<AuthSession | null>(() => {
-    const saved = localStorage.getItem('@gopme:session');
+    const saved = localStorage.getItem('@bip:session');
     return saved ? JSON.parse(saved) : null;
   });
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (session?.access_token) {
-      localStorage.setItem('@gopme:token', session.access_token);
+      localStorage.setItem('@bip:token', session.access_token);
     } else {
-      localStorage.removeItem('@gopme:token');
+      localStorage.removeItem('@bip:token');
     }
   }, [session]);
 
@@ -48,13 +48,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setTenant(response.tenant);
     setSession(response.session);
 
-    localStorage.setItem('@gopme:user', JSON.stringify(response.user));
+    localStorage.setItem('@bip:user', JSON.stringify(response.user));
     if (response.tenant) {
-      localStorage.setItem('@gopme:tenant', JSON.stringify(response.tenant));
+      localStorage.setItem('@bip:tenant', JSON.stringify(response.tenant));
     }
     if (response.session) {
-      localStorage.setItem('@gopme:session', JSON.stringify(response.session));
-      localStorage.setItem('@gopme:token', response.session.access_token);
+      localStorage.setItem('@bip:session', JSON.stringify(response.session));
+      localStorage.setItem('@bip:token', response.session.access_token);
     }
   };
 
@@ -84,10 +84,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setUser(null);
     setTenant(null);
     setSession(null);
-    localStorage.removeItem('@gopme:user');
-    localStorage.removeItem('@gopme:tenant');
-    localStorage.removeItem('@gopme:session');
-    localStorage.removeItem('@gopme:token');
+    localStorage.removeItem('@bip:user');
+    localStorage.removeItem('@bip:tenant');
+    localStorage.removeItem('@bip:session');
+    localStorage.removeItem('@bip:token');
   };
 
   return (

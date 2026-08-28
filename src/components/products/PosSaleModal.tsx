@@ -21,8 +21,9 @@ import { supabase } from '../../lib/supabase';
 import { playBeepSound } from '../../lib/sound';
 import { RemoteScannerPairModal } from './RemoteScannerPairModal';
 import type { Product, PosSaleItem, PaymentMethod, PosSaleResponse } from '../../types/product';
-import type { PosPairingSession, RemoteBarcodePayload } from '../../types/posSession';
+import type { PosPairingSession, RemoteBarcodePayload, RemoteBarcodeFeedbackPayload } from '../../types/posSession';
 import { saleService } from '../../services/saleService';
+import { productService } from '../../services/productService';
 import { ApiError } from '../../services/api';
 
 interface PosSaleModalProps {
@@ -136,13 +137,13 @@ export function PosSaleModal({
       .on('broadcast', { event: 'device-disconnected' }, () => {
         setIsPhoneConnected(false);
       })
-      .on('broadcast', { event: 'barcode-scanned' }, (event) => {
+      .on('broadcast', { event: 'barcode-scanned' }, async (event) => {
         const payload = event.payload as RemoteBarcodePayload;
         if (payload?.barcode) {
           setIsPhoneConnected(true);
           playBeepSound(1400, 0.08);
-          // Incrementa quantidade ou insere o produto
-          handleAddItemByBarcode(payload.barcode, 1);
+          // Incrementa quantidade ou insere o produto no carrinho
+          await handleAddItemByBarcode(payload.barcode, 1);
         }
       })
       .subscribe();
@@ -185,67 +186,124 @@ export function PosSaleModal({
 
   const handleAddProductItem = (product: Product, qty: number = 1) => {
     setErrorMessage(null);
-    const existingIndex = items.findIndex((item) => item.barcode === product.barcode);
     const price = product.price ? Number(product.price) : 0;
+    let resultingQty = qty;
 
-    if (existingIndex >= 0) {
-      const updated = [...items];
-      updated[existingIndex].quantity += qty;
-      setItems(updated);
-    } else {
-      setItems([
-        ...items,
+    setItems((prevItems) => {
+      const existingIndex = prevItems.findIndex((item) => item.barcode === product.barcode);
+      if (existingIndex >= 0) {
+        const updated = [...prevItems];
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          quantity: updated[existingIndex].quantity + qty,
+        };
+        resultingQty = updated[existingIndex].quantity;
+        return updated;
+      }
+      return [
+        ...prevItems,
         {
           barcode: product.barcode,
           quantity: qty,
           unitPrice: price,
           name: product.name,
         },
-      ]);
+      ];
+    });
+
+    // Envia feedback para o celular pareado se houver canal aberto
+    if (activeChannelRef.current) {
+      const feedbackPayload: RemoteBarcodeFeedbackPayload = {
+        barcode: product.barcode,
+        status: 'FOUND',
+        productName: product.name,
+        quantity: resultingQty,
+        timestamp: Date.now(),
+      };
+      activeChannelRef.current.send({
+        type: 'broadcast',
+        event: 'barcode-feedback',
+        payload: feedbackPayload,
+      });
     }
+
     setBarcodeInput('');
     setQuantityInput(1);
     setShowSuggestions(false);
   };
 
-  const handleAddItemByBarcode = (code: string, qty: number = 1) => {
+  const handleAddItemByBarcode = async (code: string, qty: number = 1) => {
     setErrorMessage(null);
     const trimmed = code.trim();
     if (!trimmed) return;
 
-    // Se houver uma sugestão exata ou primeiro resultado correspondente
+    // 1. Busca no catálogo carregado em memória (por código exato ou nome)
     const found = catalogProducts.find(
       (p) => p.barcode === trimmed || p.name.toLowerCase() === trimmed.toLowerCase()
-    ) || filteredSuggestions[0];
+    );
 
     if (found) {
       handleAddProductItem(found, qty);
       return;
     }
 
-    const existingIndex = items.findIndex((item) => item.barcode === trimmed);
-    if (existingIndex >= 0) {
-      const updated = [...items];
-      updated[existingIndex].quantity += qty;
-      setItems(updated);
-    } else {
-      setItems([
-        ...items,
-        {
+    // 2. Se não encontrou no catálogo local, faz fallback buscando pelo backend/OpenFoodFacts
+    try {
+      const barcodeRes = await productService.getByBarcode(trimmed).catch(() => null);
+      if (barcodeRes?.product) {
+        handleAddProductItem(barcodeRes.product, qty);
+        return;
+      }
+
+      // Fallback externo (Open Food Facts)
+      const offRes = await productService.lookupOpenFoodFacts(trimmed).catch(() => null);
+      if (offRes?.product?.name) {
+        const fallbackProduct: Product = {
+          id: `temp-${Date.now()}`,
+          tenantId: '',
           barcode: trimmed,
-          quantity: qty,
-          unitPrice: 0,
-          name: `Produto (${trimmed})`,
-        },
-      ]);
+          name: offRes.product.name,
+          category: offRes.product.category || 'Geral',
+          price: 0,
+          shelfQty: 0,
+          shelfMinQty: 0,
+          depotQty: 0,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        handleAddProductItem(fallbackProduct, qty);
+        return;
+      }
+    } catch {
+      // Ignora erro de requisição fallback
     }
+
+    // 3. Produto não cadastrado em nenhum lugar: exibe erro amigável e notifica o celular
+    const notFoundMsg = `Produto com código "${trimmed}" não encontrado no estoque.`;
+    setErrorMessage(notFoundMsg);
+    playBeepSound(400, 0.25); // Som de alerta de erro
+
+    if (activeChannelRef.current) {
+      const feedbackPayload: RemoteBarcodeFeedbackPayload = {
+        barcode: trimmed,
+        status: 'NOT_FOUND',
+        message: notFoundMsg,
+        timestamp: Date.now(),
+      };
+      activeChannelRef.current.send({
+        type: 'broadcast',
+        event: 'barcode-feedback',
+        payload: feedbackPayload,
+      });
+    }
+
     setBarcodeInput('');
     setQuantityInput(1);
     setShowSuggestions(false);
   };
 
   const handleRemoveItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index));
+    setItems((prevItems) => prevItems.filter((_, i) => i !== index));
   };
 
   const handleUpdateQty = (index: number, newQty: number) => {
@@ -253,14 +311,23 @@ export function PosSaleModal({
       handleRemoveItem(index);
       return;
     }
-    const updated = [...items];
-    updated[index].quantity = newQty;
-    setItems(updated);
+    setItems((prevItems) => {
+      const updated = [...prevItems];
+      if (updated[index]) {
+        updated[index] = { ...updated[index], quantity: newQty };
+      }
+      return updated;
+    });
   };
+
   const handleUpdatePrice = (index: number, newPrice: number) => {
-    const updated = [...items];
-    updated[index].unitPrice = Math.max(0, newPrice);
-    setItems(updated);
+    setItems((prevItems) => {
+      const updated = [...prevItems];
+      if (updated[index]) {
+        updated[index] = { ...updated[index], unitPrice: Math.max(0, newPrice) };
+      }
+      return updated;
+    });
   };
 
   const totalAmount = items.reduce(
@@ -351,10 +418,24 @@ export function PosSaleModal({
   };
 
   const handleSplitAmountChange = (method: string, val: number) => {
-    setSplitAmounts((prev) => ({
-      ...prev,
-      [method]: val,
-    }));
+    // Garante que o valor não seja negativo
+    const cleanVal = Math.max(0, val);
+
+    setSplitAmounts((prev) => {
+      // Soma de todos os outros métodos exceto o atual
+      const otherSum = selectedMethods
+        .filter((m) => m !== method)
+        .reduce((acc, m) => acc + (Number(prev[m]) || 0), 0);
+
+      // O valor máximo permitido para este método é o que sobra para atingir o totalAmount
+      const maxAllowed = Math.max(0, Number((totalAmount - otherSum).toFixed(2)));
+      const cappedVal = Math.min(cleanVal, maxAllowed);
+
+      return {
+        ...prev,
+        [method]: Number(cappedVal.toFixed(2)),
+      };
+    });
   };
 
   const triggerSubmitSale = () => {
@@ -746,32 +827,60 @@ export function PosSaleModal({
                 {/* Divisão de Valores caso haja múltiplos métodos selecionados */}
                 {selectedMethods.length > 1 && (
                   <div className="p-2.5 bg-brand-50/70 border border-brand-200/80 rounded-2xl space-y-1.5 animate-fadeIn">
-                    <div className="flex items-center justify-between text-tiny font-bold text-brand-800">
-                      <span>Dividir valor por forma de pagamento:</span>
-                      <span>
-                        Soma:{' '}
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                          selectedMethods.reduce((acc, m) => acc + (Number(splitAmounts[m]) || 0), 0)
-                        )}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {selectedMethods.map((m) => (
-                        <div key={m} className="space-y-0.5">
-                          <span className="text-tiny font-bold text-text-muted block truncate">
-                            {m === 'CARTAO_DEBITO' ? 'Débito' : m === 'CARTAO_CREDITO' ? 'Crédito' : m} (R$)
-                          </span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={splitAmounts[m] !== undefined ? splitAmounts[m] : ''}
-                            onChange={(e) => handleSplitAmountChange(m, parseFloat(e.target.value) || 0)}
-                            className="w-full h-8 px-2 bg-card border border-border-neutral rounded-lg text-xs font-mono font-bold text-text-primary focus:outline-none focus:border-brand-500"
-                          />
-                        </div>
-                      ))}
-                    </div>
+                    {(() => {
+                      const currentSum = selectedMethods.reduce((acc, m) => acc + (Number(splitAmounts[m]) || 0), 0);
+                      const difference = Number((totalAmount - currentSum).toFixed(2));
+                      const isComplete = Math.abs(difference) <= 0.01;
+
+                      return (
+                        <>
+                          <div className="flex items-center justify-between text-tiny font-bold">
+                            <span className="text-brand-800">Dividir valor por forma de pagamento:</span>
+                            <span className={isComplete ? 'text-status-success' : 'text-amber-700'}>
+                              Soma: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentSum)} / {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalAmount)}
+                            </span>
+                          </div>
+                          {!isComplete && difference > 0 && (
+                            <p className="text-[10px] text-amber-700 font-medium">
+                              Faltam {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(difference)} para fechar o total.
+                            </p>
+                          )}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            {selectedMethods.map((m) => {
+                              const otherSum = selectedMethods
+                                .filter((other) => other !== m)
+                                .reduce((acc, other) => acc + (Number(splitAmounts[other]) || 0), 0);
+                              const maxForThis = Math.max(0, Number((totalAmount - otherSum).toFixed(2)));
+
+                              return (
+                                <div key={m} className="space-y-0.5">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-tiny font-bold text-text-muted block truncate">
+                                      {m === 'CARTAO_DEBITO' ? 'Débito' : m === 'CARTAO_CREDITO' ? 'Crédito' : m}
+                                    </span>
+                                    <span className="text-[9px] text-neutral-400 font-mono">
+                                      (máx {maxForThis.toFixed(2)})
+                                    </span>
+                                  </div>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    max={maxForThis}
+                                    value={splitAmounts[m] !== undefined ? splitAmounts[m] : ''}
+                                    onChange={(e) => {
+                                      const parsed = parseFloat(e.target.value);
+                                      handleSplitAmountChange(m, isNaN(parsed) ? 0 : parsed);
+                                    }}
+                                    className="w-full h-8 px-2 bg-card border border-border-neutral rounded-lg text-xs font-mono font-bold text-text-primary focus:outline-none focus:border-brand-500"
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

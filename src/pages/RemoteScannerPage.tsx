@@ -10,21 +10,15 @@ import {
   FlashlightOff,
   SwitchCamera,
   Barcode,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { posSessionService } from '../services/posSessionService';
 import { supabase } from '../lib/supabase';
 import { playBeepSound } from '../lib/sound';
-import type { SessionValidationResponse } from '../types/posSession';
+import type { SessionValidationResponse, RemoteBarcodeFeedbackPayload } from '../types/posSession';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
-// Declaração de BarcodeDetector para Web API nativa caso disponível no Chromium/Android
-declare global {
-  class BarcodeDetector {
-    constructor(options?: { formats: string[] });
-    static getSupportedFormats(): Promise<string[]>;
-    detect(image: ImageBitmapSource): Promise<Array<{ rawValue: string; format: string }>>;
-  }
-}
 
 export function RemoteScannerPage() {
   const [searchParams] = useSearchParams();
@@ -40,12 +34,18 @@ export function RemoteScannerPage() {
   // Estados do Scanner Mobile
   const [scannedCount, setScannedCount] = useState<number>(0);
   const [lastScannedBarcode, setLastScannedBarcode] = useState<string | null>(null);
+  const [scanStatus, setScanStatus] = useState<{
+    status: 'FOUND' | 'NOT_FOUND' | 'SENDING';
+    message: string;
+    productName?: string;
+    quantity?: number;
+  } | null>(null);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [torchEnabled, setTorchEnabled] = useState<boolean>(false);
   const [hasTorch, setHasTorch] = useState<boolean>(false);
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
   const [scanFlash, setScanFlash] = useState<boolean>(false);
-
+  const [errorFlash, setErrorFlash] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -85,22 +85,47 @@ export function RemoteScannerPage() {
         },
       });
 
-      channel.subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          setChannelConnected(true);
-          // Notifica o desktop que o smartphone está conectado
-          channel.send({
-            type: 'broadcast',
-            event: 'device-connected',
-            payload: {
-              timestamp: Date.now(),
-              userAgent: navigator.userAgent,
-            },
-          });
-        }
-      });
-
-      channelRef.current = channel;
+      channel
+        .on('broadcast', { event: 'barcode-feedback' }, (event) => {
+          const payload = event.payload as RemoteBarcodeFeedbackPayload;
+          if (payload) {
+            if (payload.status === 'NOT_FOUND') {
+              setErrorFlash(true);
+              setTimeout(() => setErrorFlash(false), 500);
+              playBeepSound(350, 0.25);
+              if (navigator.vibrate) {
+                try {
+                  navigator.vibrate([100, 50, 100]);
+                } catch {}
+              }
+              setScanStatus({
+                status: 'NOT_FOUND',
+                message: payload.message || `Código "${payload.barcode}" não cadastrado`,
+              });
+            } else if (payload.status === 'FOUND') {
+              setScanStatus({
+                status: 'FOUND',
+                productName: payload.productName,
+                quantity: payload.quantity,
+                message: `Adicionado ao carrinho (Qtd: ${payload.quantity || 1})`,
+              });
+            }
+          }
+        })
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            setChannelConnected(true);
+            // Notifica o desktop que o smartphone está conectado
+            channel.send({
+              type: 'broadcast',
+              event: 'device-connected',
+              payload: {
+                timestamp: Date.now(),
+                userAgent: navigator.userAgent,
+              },
+            });
+          }
+        });
     } catch (err: unknown) {
       console.error('Erro ao validar sessão de pareamento:', err);
       const msg = err instanceof Error ? err.message : 'Não foi possível validar a sessão com o servidor.';
@@ -156,11 +181,12 @@ export function RemoteScannerPage() {
     // Flash visual na tela
     setScanFlash(true);
     setTimeout(() => setScanFlash(false), 200);
-
     setLastScannedBarcode(trimmed);
     setScannedCount((prev) => prev + 1);
-
-    // Broadcast Realtime para o PDV no Desktop
+    setScanStatus({
+      status: 'SENDING',
+      message: `Enviando ${trimmed}...`,
+    });
     if (channelRef.current) {
       channelRef.current.send({
         type: 'broadcast',
@@ -350,7 +376,10 @@ export function RemoteScannerPage() {
       {scanFlash && (
         <div className="absolute inset-0 bg-emerald-500/40 pointer-events-none z-50 transition-opacity duration-200" />
       )}
-
+      {/* Flash Visual de Erro (Não encontrado) */}
+      {errorFlash && (
+        <div className="absolute inset-0 bg-red-600/50 pointer-events-none z-50 transition-opacity duration-300" />
+      )}
       {/* Header Superior Mobile */}
       <header className="p-3 bg-neutral-900/90 backdrop-blur-md border-b border-neutral-800 flex items-center justify-between z-30 shrink-0">
         <div className="flex items-center gap-2">
@@ -358,8 +387,8 @@ export function RemoteScannerPage() {
             <Smartphone className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-xs font-black tracking-tight text-white flex items-center gap-1.5">
-              GO PME • BIPADOR REMOTO
+            <h1 className="text-xs font-black tracking-tight text-white flex items-center gap-1.5 lowercase">
+              bip • bipador remoto
             </h1>
             {sessionData && (
               <p className="text-[10px] text-neutral-400 truncate max-w-[200px]">
@@ -477,8 +506,40 @@ export function RemoteScannerPage() {
         )}
       </main>
 
-      {/* Footer / Card Inferior com Resumo das Leituras */}
+      {/* Footer / Card Inferior com Resumo das Leituras e Feedback em Tempo Real */}
       <footer className="p-3.5 bg-neutral-900 border-t border-neutral-800 z-30 shrink-0 space-y-2">
+        {/* Banner de Feedback do Produto Escaneado */}
+        {scanStatus && (
+          <div
+            className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 text-xs animate-fade-in ${
+              scanStatus.status === 'NOT_FOUND'
+                ? 'bg-red-950/80 border-red-800 text-red-200'
+                : scanStatus.status === 'FOUND'
+                ? 'bg-emerald-950/80 border-emerald-800 text-emerald-200'
+                : 'bg-neutral-800 border-neutral-700 text-neutral-300'
+            }`}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              {scanStatus.status === 'NOT_FOUND' ? (
+                <XCircle className="w-4 h-4 text-red-400 shrink-0" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              )}
+              <div className="truncate">
+                {scanStatus.productName && (
+                  <p className="font-bold text-white text-xs truncate">{scanStatus.productName}</p>
+                )}
+                <p className="text-[11px] opacity-90 truncate">{scanStatus.message}</p>
+              </div>
+            </div>
+            {scanStatus.quantity != null && (
+              <span className="px-2 py-0.5 rounded-full font-mono font-bold bg-emerald-900/80 text-emerald-300 border border-emerald-700/60 text-[11px] shrink-0">
+                {scanStatus.quantity} un
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-2">
             <span className="p-1.5 bg-brand-900/60 text-brand-400 rounded-lg">
@@ -489,15 +550,15 @@ export function RemoteScannerPage() {
                 Total Bipado no PDV
               </span>
               <strong className="text-base text-white font-mono">
-                {scannedCount} <span className="text-xs font-normal text-neutral-400">itens</span>
+                {scannedCount} <span className="text-xs font-normal text-neutral-400">leituras</span>
               </strong>
             </div>
           </div>
 
           {lastScannedBarcode && (
             <div className="text-right">
-              <span className="text-[10px] text-emerald-400 font-bold uppercase block">
-                ✓ Enviado com sucesso
+              <span className="text-[10px] text-neutral-400 font-bold uppercase block">
+                Último Código
               </span>
               <span className="text-xs font-mono font-bold text-white bg-neutral-800 px-2 py-0.5 rounded border border-neutral-700">
                 {lastScannedBarcode}
@@ -509,3 +570,5 @@ export function RemoteScannerPage() {
     </div>
   );
 }
+
+export default RemoteScannerPage;

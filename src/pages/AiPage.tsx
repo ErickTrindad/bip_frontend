@@ -1,6 +1,8 @@
 import { useState, useTransition } from 'react';
 import {
   Mic,
+  PenTool,
+  FileAudio,
   MessageSquare,
   Bot,
   Play,
@@ -31,11 +33,11 @@ export function AiPage() {
   const [activeTab, setActiveTab] = useState<TabType>('voice-command');
   const [isPending, startTransition] = useTransition();
 
-  // Estados de Voz / Áudio
-  const [audioInputMode, setAudioInputMode] = useState<'record' | 'upload'>('record');
+  // Estados de Entrada (Voz / Upload / Texto digitado)
+  const [inputMode, setInputMode] = useState<'record' | 'text' | 'upload'>('record');
+  const [voiceTextPrompt, setVoiceTextPrompt] = useState<string>('');
   const [audioBase64, setAudioBase64] = useState<string | null>(null);
   const [audioFilename, setAudioFilename] = useState<string>('audio.webm');
-
   // Estados de Comando de Voz e Configurações Avançadas
   const [autoExecute, setAutoExecute] = useState<boolean>(false);
   const [voiceSystemPrompt, setVoiceSystemPrompt] = useState<string>('');
@@ -78,23 +80,43 @@ export function AiPage() {
   // Submissão de Transcrição
 
   // Submissão de Comando de Voz
+  // Submissão de Comando de IA (Voz ou Texto Operacional)
   const handleVoiceCommand = () => {
     setErrorMessage(null);
     setVoiceResult(null);
 
-    if (!audioBase64) {
+    const isText = inputMode === 'text';
+    if (isText && !voiceTextPrompt.trim()) {
+      setErrorMessage('Digite o comando de operação antes de processar.');
+      return;
+    }
+
+    if (!isText && !audioBase64) {
       setErrorMessage('Grave um áudio ou envie um arquivo de comando de voz.');
       return;
     }
 
     startTransition(async () => {
       try {
-        const res = await aiService.voiceCommand({
-          audioBase64,
-          filename: audioFilename,
+        const payload: {
+          audioBase64?: string;
+          prompt?: string;
+          filename?: string;
+          systemPrompt?: string;
+          autoExecute?: boolean;
+        } = {
           systemPrompt: voiceSystemPrompt || undefined,
           autoExecute,
-        });
+        };
+
+        if (isText) {
+          payload.prompt = voiceTextPrompt.trim();
+        } else {
+          payload.audioBase64 = audioBase64!;
+          payload.filename = audioFilename;
+        }
+
+        const res = await aiService.voiceCommand(payload);
         setVoiceResult(res);
         if (!autoExecute) {
           setIsReviewModalOpen(true);
@@ -102,8 +124,10 @@ export function AiPage() {
       } catch (err: unknown) {
         if (err instanceof ApiError) {
           setErrorMessage(err.message);
+        } else if (err instanceof Error) {
+          setErrorMessage(err.message);
         } else {
-          setErrorMessage('Falha ao interpretar comando de voz.');
+          setErrorMessage('Falha ao interpretar comando de IA.');
         }
       }
     });
@@ -121,7 +145,7 @@ export function AiPage() {
         const res = await aiService.chatPrompt({
           prompt: chatPromptText,
           systemPrompt:
-            'Você é o consultor especialista de gestão de estoque e varejo da plataforma GO PME. Não inclua blocos de raciocínio interno (<think>). Dê respostas diretas, estruturadas, práticas e focadas na operação diária do lojista.',
+            'Você é o consultor especialista de gestão de estoque e varejo da plataforma bip. Não inclua blocos de raciocínio interno (<think>). Dê respostas diretas, estruturadas, práticas e focadas na operação diária do lojista.',
         });
         setChatResult(res);
       } catch (err: unknown) {
@@ -204,22 +228,66 @@ export function AiPage() {
         {/* CONTEÚDO TAB 1: COMANDO DE VOZ OPERACIONAL */}
         {activeTab === 'voice-command' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Coluna Esquerda: Gravação Direta */}
+            {/* Coluna Esquerda: Gravação Direta / Prompt Escrito */}
             <div className="lg:col-span-6 flex flex-col gap-4">
               <div className="bg-card border border-border-neutral rounded-3xl p-5 md:p-6 shadow-xs flex flex-col gap-5">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
-                    <Mic className="w-4 h-4 text-brand-600" />
-                    Gravador de Comando
-                  </h3>
+                  <div className="flex items-center gap-1 bg-canvas p-1 rounded-xl border border-border-neutral">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInputMode('record');
+                        setErrorMessage(null);
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        inputMode === 'record'
+                          ? 'bg-brand-600 text-white shadow-xs'
+                          : 'text-text-muted hover:text-text-primary hover:bg-card'
+                      }`}
+                    >
+                      <Mic className="w-3.5 h-3.5" />
+                      <span>Microfone</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInputMode('text');
+                        setErrorMessage(null);
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        inputMode === 'text'
+                          ? 'bg-brand-600 text-white shadow-xs'
+                          : 'text-text-muted hover:text-text-primary hover:bg-card'
+                      }`}
+                    >
+                      <PenTool className="w-3.5 h-3.5" />
+                      <span>Digitar Prompt</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInputMode('upload');
+                        setErrorMessage(null);
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        inputMode === 'upload'
+                          ? 'bg-brand-600 text-white shadow-xs'
+                          : 'text-text-muted hover:text-text-primary hover:bg-card'
+                      }`}
+                    >
+                      <FileAudio className="w-3.5 h-3.5" />
+                      <span>Áudio</span>
+                    </button>
+                  </div>
+
                   <button
                     type="button"
                     onClick={() => setShowAdvancedVoiceSettings(!showAdvancedVoiceSettings)}
-                    className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-text-muted hover:text-text-primary hover:bg-canvas rounded-lg border border-border-neutral transition-colors cursor-pointer"
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-text-muted hover:text-text-primary hover:bg-canvas rounded-lg border border-border-neutral transition-colors cursor-pointer"
                     title="Configurações opcionais"
                   >
                     <Settings className="w-3.5 h-3.5" />
-                    <span className="text-[11px] font-medium">Configurações</span>
+                    <span className="text-[11px] font-medium hidden sm:inline">Configurações</span>
                     {showAdvancedVoiceSettings ? (
                       <ChevronUp className="w-3 h-3" />
                     ) : (
@@ -228,37 +296,9 @@ export function AiPage() {
                   </button>
                 </div>
 
-                {/* Seletor de arquivo oculto ou exibido apenas sob configurações */}
+                {/* Configurações opcionais avançadas */}
                 {showAdvancedVoiceSettings && (
                   <div className="p-3.5 bg-canvas border border-border-neutral rounded-2xl flex flex-col gap-3 animate-fadeIn text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-text-primary">Modo de envio do áudio:</span>
-                      <div className="flex bg-card p-0.5 rounded-lg border border-border-neutral text-[11px]">
-                        <button
-                          type="button"
-                          onClick={() => setAudioInputMode('record')}
-                          className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
-                            audioInputMode === 'record'
-                              ? 'bg-brand-50 text-brand-700'
-                              : 'text-text-muted hover:text-text-primary'
-                          }`}
-                        >
-                          Microfone
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setAudioInputMode('upload')}
-                          className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
-                            audioInputMode === 'upload'
-                              ? 'bg-brand-50 text-brand-700'
-                              : 'text-text-muted hover:text-text-primary'
-                          }`}
-                        >
-                          Arquivo de áudio
-                        </button>
-                      </div>
-                    </div>
-
                     <div>
                       <label className="font-bold text-text-primary block mb-1">
                         Instrução extra de contexto (Opcional)
@@ -286,9 +326,36 @@ export function AiPage() {
                   </div>
                 )}
 
-                {audioInputMode === 'record' ? (
+                {inputMode === 'record' && (
                   <AudioRecorder onAudioReady={handleAudioReady} disabled={isPending} />
-                ) : (
+                )}
+
+                {inputMode === 'text' && (
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-text-primary">
+                      Escreva o comando em linguagem natural:
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={voiceTextPrompt}
+                      onChange={(e) => setVoiceTextPrompt(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                          e.preventDefault();
+                          handleVoiceCommand();
+                        }
+                      }}
+                      placeholder="Ex: Vendi 3 caixas de leite no dinheiro e transfere 10 refrigerantes da gôndola pro depósito..."
+                      disabled={isPending}
+                      className="w-full p-3 bg-canvas border border-border-neutral rounded-2xl text-xs text-text-primary placeholder:text-text-muted focus:border-brand-500 focus:outline-none resize-none"
+                    />
+                    <span className="text-[11px] text-text-muted">
+                      Dica: você pode digitar comandos de venda, alteração de preço, transferências ou reposição de estoque. Pressione Ctrl+Enter para enviar.
+                    </span>
+                  </div>
+                )}
+
+                {inputMode === 'upload' && (
                   <AudioUploader
                     onFileSelect={handleFileSelect}
                     onFileClear={handleFileClear}
@@ -299,7 +366,10 @@ export function AiPage() {
                 <button
                   type="button"
                   onClick={handleVoiceCommand}
-                  disabled={isPending || !audioBase64}
+                  disabled={
+                    isPending ||
+                    (inputMode === 'text' ? !voiceTextPrompt.trim() : !audioBase64)
+                  }
                   className="w-full py-4 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-bold rounded-2xl text-sm flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
                 >
                   {isPending ? (
@@ -310,13 +380,14 @@ export function AiPage() {
                   ) : (
                     <>
                       <Zap className="w-5 h-5" />
-                      <span>Processar comando falado</span>
+                      <span>
+                        {inputMode === 'text' ? 'Processar comando escrito' : 'Processar comando de áudio'}
+                      </span>
                     </>
                   )}
                 </button>
               </div>
             </div>
-
             {/* Coluna Direita: Resultado do Comando */}
             <div className="lg:col-span-6 flex flex-col gap-4">
               <div className="bg-card border border-border-neutral rounded-3xl p-5 shadow-xs flex flex-col gap-4 min-h-[380px]">

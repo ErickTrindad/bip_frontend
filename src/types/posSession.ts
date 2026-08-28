@@ -36,6 +36,14 @@ export interface RemoteBarcodePayload {
   deviceId?: string;
 }
 
+export interface RemoteBarcodeFeedbackPayload {
+  barcode: string;
+  status: 'FOUND' | 'NOT_FOUND';
+  productName?: string;
+  quantity?: number;
+  message?: string;
+  timestamp: number;
+}
 export interface ClosePosSessionResponse {
   message: string;
   sessionId: string;

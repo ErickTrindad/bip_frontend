@@ -43,7 +43,7 @@ export function AuthPage() {
     try {
       await register(payload);
       navigate("/products", {
-        state: { welcomeMessage: "Conta criada com sucesso! Bem-vindo ao GO PME." },
+        state: { welcomeMessage: "Conta criada com sucesso! Bem-vindo ao bip." },
       });
     } catch (err: unknown) {
       if (err instanceof ApiError) {
@@ -207,7 +207,7 @@ export function AuthPage() {
                 href="#termos"
                 onClick={(e) => {
                   e.preventDefault();
-                  alert("Termos de Uso do GO PME.");
+                  alert("Termos de Uso do bip.");
                 }}
                 className="text-text-muted hover:text-text-primary hover:underline transition-colors"
               >

@@ -97,7 +97,7 @@ export function ProductsPage() {
     try {
       if (navigator.onLine) {
         // Se não houver filtro de busca/categoria ativo, tenta delta sync rápido se já tiver sincronizado antes
-        const lastSyncIso = localStorage.getItem('@gopme:last_synced_at');
+        const lastSyncIso = localStorage.getItem('@bip:last_synced_at');
         
         if (lastSyncIso && !searchTerm && !selectedCategory) {
           try {
@@ -115,7 +115,7 @@ export function ProductsPage() {
               );
             }
             
-            localStorage.setItem('@gopme:last_synced_at', delta.syncedAt);
+            localStorage.setItem('@bip:last_synced_at', delta.syncedAt);
           } catch (deltaErr) {
             console.warn('Delta sync falhou, prosseguindo com listagem completa:', deltaErr);
           }
@@ -141,7 +141,7 @@ export function ProductsPage() {
             response.products.map((p) => ({ ...p, synced: true }))
           ).catch((e) => console.warn('Dexie save error:', e));
         }
-        localStorage.setItem('@gopme:last_synced_at', new Date().toISOString());
+        localStorage.setItem('@bip:last_synced_at', new Date().toISOString());
       } else {
         // Offline load from IndexedDB
         let offlineList = await db.products.toArray();

@@ -41,7 +41,7 @@ describe('aiService Integration Unit Tests', () => {
     });
     globalThis.fetch = fetchMock;
 
-    localStorage.setItem('@gopme:token', 'test-token');
+    localStorage.setItem('@bip:token', 'test-token');
 
     const result = await aiService.listModels();
 
@@ -73,7 +73,7 @@ describe('aiService Integration Unit Tests', () => {
     });
     globalThis.fetch = fetchMock;
 
-    localStorage.setItem('@gopme:token', 'fake-jwt-token');
+    localStorage.setItem('@bip:token', 'fake-jwt-token');
 
     const result = await aiService.transcribeBase64({
       audioBase64: 'UklGRiQAAABXQVZFZ...',
@@ -113,7 +113,7 @@ describe('aiService Integration Unit Tests', () => {
     });
     globalThis.fetch = fetchMock;
 
-    localStorage.setItem('@gopme:token', 'fake-jwt-token');
+    localStorage.setItem('@bip:token', 'fake-jwt-token');
 
     const dummyBlob = new Blob(['audio data'], { type: 'audio/webm' });
     const result = await aiService.transcribeUpload(dummyBlob, {
@@ -206,7 +206,7 @@ describe('aiService Integration Unit Tests', () => {
     });
     globalThis.fetch = fetchMock;
 
-    localStorage.setItem('@gopme:token', 'auth-token');
+    localStorage.setItem('@bip:token', 'auth-token');
 
     const result = await aiService.voiceCommand({
       audioBase64: 'base64audio==',
@@ -234,5 +234,48 @@ describe('aiService Integration Unit Tests', () => {
     expect(result.executed).toBe(true);
     expect(result.actions?.length).toBe(2);
     expect(result.matchedProduct?.name).toBe('Pepsi Twist 2L');
+  });
+
+  it('voiceCommand sends text prompt payload when mic is not used', async () => {
+    const mockResponse = {
+      transcription: 'Vendi 2 coca cola no pix',
+      intent: 'POS_SALE',
+      extractedData: {
+        productQuery: 'coca cola',
+        quantity: 2,
+        paymentMethod: 'PIX',
+      },
+      actions: [
+        { action: 'POS_SALE', productQuery: 'coca cola', quantity: 2, executed: false },
+      ],
+      explanation: 'Venda de 2 unidades de coca cola via PIX registrada.',
+      executed: false,
+    };
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockResponse,
+    });
+    globalThis.fetch = fetchMock;
+
+    const result = await aiService.voiceCommand({
+      prompt: 'Vendi 2 coca cola no pix',
+      autoExecute: false,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/ai/voice-command'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          prompt: 'Vendi 2 coca cola no pix',
+          autoExecute: false,
+        }),
+      })
+    );
+
+    expect(result.transcription).toBe('Vendi 2 coca cola no pix');
+    expect(result.intent).toBe('POS_SALE');
   });
 });

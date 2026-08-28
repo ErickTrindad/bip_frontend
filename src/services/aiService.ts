@@ -49,7 +49,7 @@ export const aiService = {
       formData.append('prompt', options.prompt);
     }
 
-    const token = localStorage.getItem('@gopme:token');
+    const token = localStorage.getItem('@bip:token');
     const headers: Record<string, string> = {};
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;

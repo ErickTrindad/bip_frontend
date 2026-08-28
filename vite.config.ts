@@ -14,8 +14,8 @@ export default defineConfig({
         enabled: true
       },
       manifest: {
-        name: 'GO PME Frontend',
-        short_name: 'GO PME',
+        name: 'bip',
+        short_name: 'bip',
         description: 'App Offline-first para reposição de gôndolas e controle de estoque',
         theme_color: '#ffffff',
         icons: [

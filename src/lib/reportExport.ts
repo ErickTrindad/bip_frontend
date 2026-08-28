@@ -56,7 +56,7 @@ export function printReport(title: string, contentHtml: string) {
     <html lang="pt-BR">
       <head>
         <meta charset="utf-8">
-        <title>${title} - Go PME</title>
+        <title>${title} - bip</title>
         <style>
           body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -81,7 +81,7 @@ export function printReport(title: string, contentHtml: string) {
       </head>
       <body>
         <h1>${title}</h1>
-        <div class="subtitle">Gerado em ${new Date().toLocaleString('pt-BR')} • Go PME Gestão Inteligente</div>
+        <div class="subtitle">Gerado em ${new Date().toLocaleString('pt-BR')} • bip Gestão Inteligente</div>
         ${contentHtml}
         <script>
           window.onload = function() {
