@@ -53,7 +53,15 @@ export function RemoteScannerPage() {
   
   const addLog = useCallback((msg: string, data?: any) => {
     const time = new Date().toLocaleTimeString('pt-BR', { hour12: false });
-    const fullMsg = data ? `${msg} ${JSON.stringify(data)}` : msg;
+    let dataStr = '';
+    if (data) {
+      if (data instanceof Error || data.name === 'ApiError') {
+        dataStr = data.message || JSON.stringify(data);
+      } else {
+        dataStr = JSON.stringify(data);
+      }
+    }
+    const fullMsg = dataStr ? `${msg} ${dataStr}` : msg;
     console.log(`[Scanner DEBUG] ${fullMsg}`);
     setDebugLogs(prev => [{ time, msg: fullMsg }, ...prev].slice(0, 15));
   }, []);

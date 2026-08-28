@@ -59,7 +59,15 @@ export function PosSaleModal({
   const [isRemotePairModalOpen, setIsRemotePairModalOpen] = useState(false);
   const [remoteSession, setRemoteSession] = useState<PosPairingSession | null>(() => {
     const saved = sessionStorage.getItem('@bip:pos_session');
-    return saved ? JSON.parse(saved) : null;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed?.expiresAt && new Date(parsed.expiresAt).getTime() > Date.now()) {
+          return parsed;
+        }
+      } catch (e) {}
+    }
+    return null;
   });
   const [isPhoneConnected, setIsPhoneConnected] = useState<boolean>(false);
   const [showSuggestions, setShowSuggestions] = useState(false);

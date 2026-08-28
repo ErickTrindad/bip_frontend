@@ -35,9 +35,14 @@ export async function request<T>(endpoint: string, options: RequestInit = {}): P
 
     if (!response.ok) {
       const message = data.error || data.message || 'Ocorreu um erro na requisição';
-      
       // Se o token estiver expirado ou inválido (401), despacha evento para logout / redirecionamento
-      if (response.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/register')) {
+      // Ignora rotas públicas como auth e a rota de validação de sessão (usada pelo celular anônimo)
+      if (
+        response.status === 401 &&
+        !endpoint.includes('/auth/login') &&
+        !endpoint.includes('/auth/register') &&
+        !endpoint.includes('/pos/sessions/')
+      ) {
         window.dispatchEvent(new CustomEvent('auth:unauthorized', { detail: { message } }));
       }
 
