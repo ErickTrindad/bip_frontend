@@ -46,6 +46,15 @@ export function RemoteScannerPage() {
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
   const [scanFlash, setScanFlash] = useState<boolean>(false);
   const [errorFlash, setErrorFlash] = useState<boolean>(false);
+  const [debugLogs, setDebugLogs] = useState<{time: string, msg: string}[]>([]);
+  
+  const addLog = useCallback((msg: string, data?: any) => {
+    const time = new Date().toLocaleTimeString('pt-BR', { hour12: false });
+    const fullMsg = data ? `${msg} ${JSON.stringify(data)}` : msg;
+    console.log(`[Scanner DEBUG] ${fullMsg}`);
+    setDebugLogs(prev => [{ time, msg: fullMsg }, ...prev].slice(0, 15));
+  }, []);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -53,41 +62,45 @@ export function RemoteScannerPage() {
   const animationFrameRef = useRef<number | null>(null);
   const lastScannedTimeMapRef = useRef<Map<string, number>>(new Map());
 
-  // 1. Validação da Sessão
   const validateSession = async () => {
+    addLog('1. validateSession iniciado', { sessionId });
     if (!sessionId || !token) {
+      addLog('Falha: sessionId ou token ausentes.');
       setError('Link de pareamento incompleto. Leia o QR Code novamente no computador.');
       setLoading(false);
       return;
     }
-
-    setLoading(true);
-    setError(null);
-
     try {
-      const response = await posSessionService.validatePairingSession(sessionId, token);
+      addLog('2. Solicitando validação no backend...');
+      const response = await posSessionService.validatePairingSession(sessionId!, token!);
+      addLog('3. Resposta da validação', { valid: response.valid, status: response.status });
+      
       if (!response.valid || response.status !== 'ACTIVE') {
+        addLog('Sessão inválida ou inativa.');
+        setError('Esta sessão de pareamento expirou ou já foi encerrada.');
+        console.warn('[Scanner DEBUG] Sessão inválida ou inativa.');
         setError('Esta sessão de pareamento expirou ou já foi encerrada.');
         setLoading(false);
         return;
       }
-
       setSessionData(response);
-
+      
       // Conecta ao canal Supabase Broadcast
       if (channelRef.current) {
+        addLog('Removendo canal existente antes de recriar.');
         supabase.removeChannel(channelRef.current);
       }
 
       const channel = supabase.channel(response.channel, {
         config: {
-          broadcast: { self: false },
+          broadcast: { self: false, ack: true }, // Ativando ACK para garantir resposta do servidor
         },
       });
-
+      addLog(`4. Inscrevendo no canal: ${response.channel}`);
       channel
         .on('broadcast', { event: 'barcode-feedback' }, (event) => {
           const payload = event.payload as RemoteBarcodeFeedbackPayload;
+          addLog('<<< FEEDBACK RECEBIDO', { status: payload?.status, barcode: payload?.barcode });
           if (payload) {
             if (payload.status === 'NOT_FOUND') {
               setErrorFlash(true);
@@ -112,11 +125,12 @@ export function RemoteScannerPage() {
             }
           }
         })
-        .subscribe((status) => {
+        .subscribe(async (status) => {
+          addLog(`5. Status do canal mudou: ${status}`);
           if (status === 'SUBSCRIBED') {
             setChannelConnected(true);
-            // Notifica o desktop que o smartphone está conectado
-            channel.send({
+            addLog('6. Enviando evento device-connected...');
+            const sendStatus = await channel.send({
               type: 'broadcast',
               event: 'device-connected',
               payload: {
@@ -124,10 +138,13 @@ export function RemoteScannerPage() {
                 userAgent: navigator.userAgent,
               },
             });
+            addLog('7. device-connected enviado', sendStatus);
           }
         });
+
+      channelRef.current = channel;
     } catch (err: unknown) {
-      console.error('Erro ao validar sessão de pareamento:', err);
+      addLog('Erro ao validar sessão de pareamento', err);
       const msg = err instanceof Error ? err.message : 'Não foi possível validar a sessão com o servidor.';
       setError(msg);
     } finally {
@@ -152,15 +169,20 @@ export function RemoteScannerPage() {
   }, [sessionId, token]);
 
   // 2. Despacho do Código de Barras Detectado com Debounce Ágil (600ms)
-  const handleBarcodeDetected = useCallback((barcode: string) => {
+  const handleBarcodeDetected = useCallback(async (barcode: string) => {
+    addLog(`📸 LIDO PELA CAMERA: ${barcode}`);
     const trimmed = barcode.trim();
-    if (!trimmed || trimmed.length < 3) return;
+    if (!trimmed || trimmed.length < 3) {
+      addLog('Código ignorado (curto)');
+      return;
+    }
 
     const now = Date.now();
     const lastSeen = lastScannedTimeMapRef.current.get(trimmed) || 0;
 
     // Debounce / Throttle ágil de 600ms para permitir bipar repetidas vezes o mesmo item rapidamente
     if (now - lastSeen < 600) {
+      addLog('Ignorado por debounce');
       return;
     }
 
@@ -188,7 +210,8 @@ export function RemoteScannerPage() {
       message: `Enviando ${trimmed}...`,
     });
     if (channelRef.current) {
-      channelRef.current.send({
+      addLog(`🚀 Enviando barcode-scanned: ${trimmed}`);
+      const sendStatus = await channelRef.current.send({
         type: 'broadcast',
         event: 'barcode-scanned',
         payload: {
@@ -196,9 +219,19 @@ export function RemoteScannerPage() {
           scannedAt: now,
         },
       });
+      addLog(`📡 Status do envio: ${sendStatus}`);
+      
+      if (sendStatus !== 'ok') {
+        console.warn('[Scanner DEBUG] Falha no Supabase ao despachar a mensagem. Verifique a rede ou RLS.');
+        setScanStatus({
+          status: 'NOT_FOUND',
+          message: 'Falha na rede ao enviar. Tente de novo.',
+        });
+      }
+    } else {
+      console.error('[Scanner DEBUG] channelRef.current está nulo! Celular desconectado do canal.');
     }
   }, []);
-
   // 3. Controle da Câmera & Leitura Contínua
   const stopCamera = () => {
     if (animationFrameRef.current) {
@@ -455,7 +488,6 @@ export function RemoteScannerPage() {
               autoPlay
               className="w-full h-full object-cover"
             />
-
             {/* Máscara de Alinhamento do Código de Barras (Overlay de Mira) */}
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-6">
               <div className="w-full max-w-xs h-48 border-2 border-brand-500/80 rounded-3xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.55)]">
@@ -507,64 +539,89 @@ export function RemoteScannerPage() {
       </main>
 
       {/* Footer / Card Inferior com Resumo das Leituras e Feedback em Tempo Real */}
-      <footer className="p-3.5 bg-neutral-900 border-t border-neutral-800 z-30 shrink-0 space-y-2">
-        {/* Banner de Feedback do Produto Escaneado */}
-        {scanStatus && (
-          <div
-            className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 text-xs animate-fade-in ${
-              scanStatus.status === 'NOT_FOUND'
-                ? 'bg-red-950/80 border-red-800 text-red-200'
-                : scanStatus.status === 'FOUND'
-                ? 'bg-emerald-950/80 border-emerald-800 text-emerald-200'
-                : 'bg-neutral-800 border-neutral-700 text-neutral-300'
-            }`}
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              {scanStatus.status === 'NOT_FOUND' ? (
-                <XCircle className="w-4 h-4 text-red-400 shrink-0" />
-              ) : (
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-              )}
-              <div className="truncate">
-                {scanStatus.productName && (
-                  <p className="font-bold text-white text-xs truncate">{scanStatus.productName}</p>
-                )}
-                <p className="text-[11px] opacity-90 truncate">{scanStatus.message}</p>
-              </div>
+      <footer className="bg-neutral-900 border-t border-neutral-800 z-30 shrink-0 flex flex-col relative">
+        {/* Painel de Debug Overlay (iOS Terminal) */}
+        {debugLogs.length > 0 && (
+          <div className="absolute bottom-full left-0 right-0 bg-black/85 max-h-48 overflow-y-auto p-2 text-[10px] font-mono border-t border-neutral-800 pointer-events-auto shadow-inner flex flex-col gap-1 z-40">
+            <div className="text-emerald-500 font-bold mb-1 flex items-center justify-between sticky top-0 bg-black/90 pb-1 backdrop-blur-sm">
+              <span>Terminal de Debug (iOS)</span>
+              <button 
+                onClick={() => setDebugLogs([])} 
+                className="text-neutral-400 hover:text-white px-2 py-0.5 bg-neutral-800 rounded border border-neutral-700"
+              >
+                Limpar
+              </button>
             </div>
-            {scanStatus.quantity != null && (
-              <span className="px-2 py-0.5 rounded-full font-mono font-bold bg-emerald-900/80 text-emerald-300 border border-emerald-700/60 text-[11px] shrink-0">
-                {scanStatus.quantity} un
-              </span>
-            )}
+            <div className="flex flex-col-reverse gap-1">
+              {debugLogs.map((log, i) => (
+                <div key={i} className="text-emerald-400 leading-tight">
+                  <span className="text-neutral-500 mr-1">[{log.time}]</span>
+                  {log.msg}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
-        <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 bg-brand-900/60 text-brand-400 rounded-lg">
-              <Barcode className="w-4 h-4" />
-            </span>
-            <div>
-              <span className="text-[10px] text-neutral-400 block font-bold uppercase tracking-wider">
-                Total Bipado no PDV
-              </span>
-              <strong className="text-base text-white font-mono">
-                {scannedCount} <span className="text-xs font-normal text-neutral-400">leituras</span>
-              </strong>
-            </div>
-          </div>
-
-          {lastScannedBarcode && (
-            <div className="text-right">
-              <span className="text-[10px] text-neutral-400 font-bold uppercase block">
-                Último Código
-              </span>
-              <span className="text-xs font-mono font-bold text-white bg-neutral-800 px-2 py-0.5 rounded border border-neutral-700">
-                {lastScannedBarcode}
-              </span>
+        <div className="p-3.5 space-y-2 z-50 bg-neutral-900">
+          {/* Banner de Feedback do Produto Escaneado */}
+          {scanStatus && (
+            <div
+              className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 text-xs animate-fade-in ${
+                scanStatus.status === 'NOT_FOUND'
+                  ? 'bg-red-950/80 border-red-800 text-red-200'
+                  : scanStatus.status === 'FOUND'
+                  ? 'bg-emerald-950/80 border-emerald-800 text-emerald-200'
+                  : 'bg-neutral-800 border-neutral-700 text-neutral-300'
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                {scanStatus.status === 'NOT_FOUND' ? (
+                  <XCircle className="w-4 h-4 text-red-400 shrink-0" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                )}
+                <div className="truncate">
+                  {scanStatus.productName && (
+                    <p className="font-bold text-white text-xs truncate">{scanStatus.productName}</p>
+                  )}
+                  <p className="text-[11px] opacity-90 truncate">{scanStatus.message}</p>
+                </div>
+              </div>
+              {scanStatus.quantity != null && (
+                <span className="px-2 py-0.5 rounded-full font-mono font-bold bg-emerald-900/80 text-emerald-300 border border-emerald-700/60 text-[11px] shrink-0">
+                  {scanStatus.quantity} un
+                </span>
+              )}
             </div>
           )}
+
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 bg-brand-900/60 text-brand-400 rounded-lg">
+                <Barcode className="w-4 h-4" />
+              </span>
+              <div>
+                <span className="text-[10px] text-neutral-400 block font-bold uppercase tracking-wider">
+                  Total Bipado no PDV
+                </span>
+                <strong className="text-base text-white font-mono">
+                  {scannedCount} <span className="text-xs font-normal text-neutral-400">leituras</span>
+                </strong>
+              </div>
+            </div>
+
+            {lastScannedBarcode && (
+              <div className="text-right">
+                <span className="text-[10px] text-neutral-400 font-bold uppercase block">
+                  Último Código
+                </span>
+                <span className="text-xs font-mono font-bold text-white bg-neutral-800 px-2 py-0.5 rounded border border-neutral-700">
+                  {lastScannedBarcode}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </footer>
     </div>
