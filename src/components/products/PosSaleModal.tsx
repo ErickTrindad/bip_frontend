@@ -57,7 +57,10 @@ export function PosSaleModal({
   const [successResult, setSuccessResult] = useState<PosSaleResponse | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const [isRemotePairModalOpen, setIsRemotePairModalOpen] = useState(false);
-  const [remoteSession, setRemoteSession] = useState<PosPairingSession | null>(null);
+  const [remoteSession, setRemoteSession] = useState<PosPairingSession | null>(() => {
+    const saved = sessionStorage.getItem('@bip:pos_session');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [isPhoneConnected, setIsPhoneConnected] = useState<boolean>(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
@@ -124,6 +127,7 @@ export function PosSaleModal({
   // Conexão ao Canal Realtime Supabase Broadcast para o Scanner Remoto
   const connectRemoteScanner = (session: PosPairingSession) => {
     setRemoteSession(session);
+    sessionStorage.setItem('@bip:pos_session', JSON.stringify(session));
 
     if (activeChannelRef.current) {
       supabase.removeChannel(activeChannelRef.current);
@@ -137,7 +141,6 @@ export function PosSaleModal({
       .on('broadcast', { event: 'device-connected' }, () => {
         setIsPhoneConnected(true);
         playBeepSound(1600, 0.12);
-        // Fecha o modal do QR Code automaticamente após 1 segundo
         setTimeout(() => setIsRemotePairModalOpen(false), 1000);
       })
       .on('broadcast', { event: 'device-disconnected' }, () => {
@@ -148,7 +151,6 @@ export function PosSaleModal({
         if (payload?.barcode) {
           setIsPhoneConnected(true);
           playBeepSound(1400, 0.08);
-          // Incrementa quantidade ou insere o produto no carrinho
           try {
             await handleAddItemByBarcode(payload.barcode, 1);
           } catch (err) {
@@ -161,6 +163,13 @@ export function PosSaleModal({
     activeChannelRef.current = channel;
   };
 
+  // Restaura a conexão caso o modal seja aberto e já exista uma sessão
+  useEffect(() => {
+    if (isOpen && remoteSession && !activeChannelRef.current) {
+      connectRemoteScanner(remoteSession);
+    }
+  }, [isOpen, remoteSession]);
+
   // Desconecta o canal Realtime quando o PDV for fechado
   useEffect(() => {
     if (!isOpen) {
@@ -169,15 +178,8 @@ export function PosSaleModal({
         activeChannelRef.current = null;
       }
       setIsPhoneConnected(false);
-      setRemoteSession(null);
+      // Não limpa a sessão para poder reaproveitar ao reabrir
     }
-
-    return () => {
-      if (activeChannelRef.current) {
-        supabase.removeChannel(activeChannelRef.current);
-        activeChannelRef.current = null;
-      }
-    };
   }, [isOpen]);
 
   // Filtra produtos em tempo real por nome ou código de barras
