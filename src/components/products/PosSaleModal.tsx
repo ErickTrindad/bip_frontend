@@ -24,6 +24,7 @@ import type { Product, PosSaleItem, PaymentMethod, PosSaleResponse } from '../..
 import type { PosPairingSession, RemoteBarcodePayload, RemoteBarcodeFeedbackPayload } from '../../types/posSession';
 import { saleService } from '../../services/saleService';
 import { productService } from '../../services/productService';
+import { db } from '../../lib/db';
 import { ApiError } from '../../services/api';
 
 interface PosSaleModalProps {
@@ -35,6 +36,7 @@ interface PosSaleModalProps {
   scannedBarcode?: string | null;
   onBarcodeConsumed?: () => void;
 }
+
 export function PosSaleModal({
   isOpen,
   onClose,
@@ -62,6 +64,10 @@ export function PosSaleModal({
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const activeChannelRef = useRef<RealtimeChannel | null>(null);
+  // Mantém refs atualizadas para que o callback assíncrono do Supabase sempre enxergue o catálogo mais recente
+  const catalogProductsRef = useRef<Product[]>(catalogProducts);
+  catalogProductsRef.current = catalogProducts;
+
   useEffect(() => {
     if (isOpen && scannedBarcode) {
       handleAddItemByBarcode(scannedBarcode, 1);
@@ -143,7 +149,11 @@ export function PosSaleModal({
           setIsPhoneConnected(true);
           playBeepSound(1400, 0.08);
           // Incrementa quantidade ou insere o produto no carrinho
-          await handleAddItemByBarcode(payload.barcode, 1);
+          try {
+            await handleAddItemByBarcode(payload.barcode, 1);
+          } catch (err) {
+            console.error('Erro ao processar código escaneado via broadcast:', err);
+          }
         }
       })
       .subscribe();
@@ -231,15 +241,19 @@ export function PosSaleModal({
     setQuantityInput(1);
     setShowSuggestions(false);
   };
-
   const handleAddItemByBarcode = async (code: string, qty: number = 1) => {
     setErrorMessage(null);
-    const trimmed = code.trim();
+    const trimmed = String(code || '').trim();
     if (!trimmed) return;
 
-    // 1. Busca no catálogo carregado em memória (por código exato ou nome)
-    const found = catalogProducts.find(
-      (p) => p.barcode === trimmed || p.name.toLowerCase() === trimmed.toLowerCase()
+    const currentCatalog = catalogProductsRef.current || catalogProducts || [];
+
+    // 1. Busca no catálogo carregado em memória (por código exato, sem case, ou nome)
+    let found = currentCatalog.find(
+      (p) =>
+        p.barcode === trimmed ||
+        p.barcode.toLowerCase() === trimmed.toLowerCase() ||
+        p.name.toLowerCase() === trimmed.toLowerCase()
     );
 
     if (found) {
@@ -247,7 +261,22 @@ export function PosSaleModal({
       return;
     }
 
-    // 2. Se não encontrou no catálogo local, faz fallback buscando pelo backend/OpenFoodFacts
+    // 2. Busca no banco de dados local IndexedDB (Dexie) - essencial caso o catálogo esteja paginado ou filtrado
+    try {
+      const offlineProduct = await db.products
+        .where('barcode')
+        .equalsIgnoreCase(trimmed)
+        .first();
+
+      if (offlineProduct) {
+        handleAddProductItem(offlineProduct, qty);
+        return;
+      }
+    } catch (e) {
+      console.warn('Erro ao consultar IndexedDB:', e);
+    }
+
+    // 3. Se não encontrou localmente, consulta a API do backend
     try {
       const barcodeRes = await productService.getByBarcode(trimmed).catch(() => null);
       if (barcodeRes?.product) {
@@ -255,7 +284,7 @@ export function PosSaleModal({
         return;
       }
 
-      // Fallback externo (Open Food Facts)
+      // 4. Fallback externo (Open Food Facts)
       const offRes = await productService.lookupOpenFoodFacts(trimmed).catch(() => null);
       if (offRes?.product?.name) {
         const fallbackProduct: Product = {
@@ -275,10 +304,10 @@ export function PosSaleModal({
         return;
       }
     } catch {
-      // Ignora erro de requisição fallback
+      // Ignora erro de requisição
     }
 
-    // 3. Produto não cadastrado em nenhum lugar: exibe erro amigável e notifica o celular
+    // 5. Se não encontrou em nenhuma camada: feedback sonoro e visual
     const notFoundMsg = `Produto com código "${trimmed}" não encontrado no estoque.`;
     setErrorMessage(notFoundMsg);
     playBeepSound(400, 0.25); // Som de alerta de erro
