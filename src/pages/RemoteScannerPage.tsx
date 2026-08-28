@@ -61,6 +61,7 @@ export function RemoteScannerPage() {
   const zxingReaderRef = useRef<BrowserMultiFormatReader | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const lastScannedTimeMapRef = useRef<Map<string, number>>(new Map());
+  const lastGlobalScanRef = useRef<number>(0);
 
   const validateSession = async () => {
     addLog('1. validateSession iniciado', { sessionId });
@@ -173,20 +174,24 @@ export function RemoteScannerPage() {
     addLog(`📸 LIDO PELA CAMERA: ${barcode}`);
     const trimmed = barcode.trim();
     if (!trimmed || trimmed.length < 3) {
-      addLog('Código ignorado (curto)');
+      return;
+    }
+    const now = Date.now();
+    // Trava global: 1.5 segundos entre QUALQUER leitura para evitar spam de câmera
+    if (now - lastGlobalScanRef.current < 1500) {
       return;
     }
 
-    const now = Date.now();
     const lastSeen = lastScannedTimeMapRef.current.get(trimmed) || 0;
 
-    // Debounce / Throttle ágil de 600ms para permitir bipar repetidas vezes o mesmo item rapidamente
-    if (now - lastSeen < 600) {
-      addLog('Ignorado por debounce');
+    // Debounce adicional de segurança para o mesmo código
+    if (now - lastSeen < 1500) {
       return;
     }
 
+    lastGlobalScanRef.current = now;
     lastScannedTimeMapRef.current.set(trimmed, now);
+
 
     // Feedback tátil imediato no celular
     if (navigator.vibrate) {

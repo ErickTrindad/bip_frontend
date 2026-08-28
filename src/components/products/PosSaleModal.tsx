@@ -286,25 +286,6 @@ export function PosSaleModal({
         return;
       }
 
-      // 4. Fallback externo (Open Food Facts)
-      const offRes = await productService.lookupOpenFoodFacts(trimmed).catch(() => null);
-      if (offRes?.product?.name) {
-        const fallbackProduct: Product = {
-          id: `temp-${Date.now()}`,
-          tenantId: '',
-          barcode: trimmed,
-          name: offRes.product.name,
-          category: offRes.product.category || 'Geral',
-          price: 0,
-          shelfQty: 0,
-          shelfMinQty: 0,
-          depotQty: 0,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        handleAddProductItem(fallbackProduct, qty);
-        return;
-      }
     } catch {
       // Ignora erro de requisição
     }
