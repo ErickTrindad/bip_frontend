@@ -9,6 +9,7 @@ import {
   Flashlight,
   FlashlightOff,
   SwitchCamera,
+  ZoomIn,
   Barcode,
   CheckCircle2,
   XCircle,
@@ -43,6 +44,8 @@ export function RemoteScannerPage() {
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [torchEnabled, setTorchEnabled] = useState<boolean>(false);
   const [hasTorch, setHasTorch] = useState<boolean>(false);
+  const [hasZoom, setHasZoom] = useState<boolean>(false);
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
   const [scanFlash, setScanFlash] = useState<boolean>(false);
   const [errorFlash, setErrorFlash] = useState<boolean>(false);
@@ -259,19 +262,36 @@ export function RemoteScannerPage() {
         audio: false,
         video: {
           facingMode: { ideal: facingMode },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: 1920, min: 1280 },
+          height: { ideal: 1080, min: 720 },
+          // @ts-ignore - TS MediaTrackConstraints may not have focusMode typings yet
+          focusMode: { ideal: 'continuous' }
         },
       };
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
 
-      // Detecta se a câmera possui suporte a lanterna (Torch)
+      // Detecta capacidades avançadas (Lanterna e Zoom)
       const track = stream.getVideoTracks()[0];
-      const capabilities = track.getCapabilities?.() as { torch?: boolean } | undefined;
+      const capabilities = track.getCapabilities?.() as any;
       setHasTorch(!!capabilities?.torch);
-
+      
+      if (capabilities?.zoom) {
+        setHasZoom(true);
+        // Aplica um zoom inicial de até 2.0x se suportado, muito útil para rótulos pequenos
+        const initialZoom = Math.min(2.0, capabilities.zoom.max || 1);
+        try {
+          await track.applyConstraints({
+            advanced: [{ zoom: initialZoom }]
+          } as any);
+          setZoomLevel(initialZoom);
+        } catch (e) {
+          console.warn('Falha ao aplicar zoom inicial:', e);
+        }
+      } else {
+        setHasZoom(false);
+      }
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
@@ -301,7 +321,30 @@ export function RemoteScannerPage() {
       console.warn('Erro ao alternar lanterna:', err);
     }
   };
+  // Alterna Zoom
+  const toggleZoom = async () => {
+    if (!streamRef.current) return;
+    const track = streamRef.current.getVideoTracks()[0];
+    if (!track) return;
 
+    const capabilities = track.getCapabilities?.() as any;
+    if (!capabilities?.zoom) return;
+
+    try {
+      const maxZoom = capabilities.zoom.max || 1;
+      const minZoom = capabilities.zoom.min || 1;
+      
+      // Cicla entre 1x e 2x (ou min e max)
+      const nextZoom = zoomLevel > 1.5 ? minZoom : Math.min(2.0, maxZoom);
+      
+      await track.applyConstraints({
+        advanced: [{ zoom: nextZoom }]
+      } as any);
+      setZoomLevel(nextZoom);
+    } catch (err) {
+      console.warn('Erro ao alternar zoom:', err);
+    }
+  };
   // Alterna câmera
   const toggleCameraFacing = () => {
     setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
@@ -326,17 +369,15 @@ export function RemoteScannerPage() {
     let isProcessing = false;
 
     // Configura ZXing
+    // Configura ZXing APENAS com os formatos do varejo
     const hints = new Map();
     hints.set(DecodeHintType.POSSIBLE_FORMATS, [
       BarcodeFormat.EAN_13,
       BarcodeFormat.EAN_8,
       BarcodeFormat.CODE_128,
-      BarcodeFormat.CODE_39,
       BarcodeFormat.UPC_A,
-      BarcodeFormat.UPC_E,
-      BarcodeFormat.QR_CODE,
-      BarcodeFormat.ITF,
     ]);
+    // Força o ZXing a processar pixels menores a um custo de CPU (necessário para rótulos curvos)
     hints.set(DecodeHintType.TRY_HARDER, true);
     const zxingReader = new BrowserMultiFormatReader(hints);
     zxingReaderRef.current = zxingReader;
@@ -346,7 +387,7 @@ export function RemoteScannerPage() {
     if (hasNativeBarcodeDetector) {
       try {
         nativeDetector = new BarcodeDetector({
-          formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code', 'itf'],
+          formats: ['ean_13', 'ean_8', 'code_128', 'upc_a'],
         });
       } catch {
         nativeDetector = null;
@@ -530,6 +571,17 @@ export function RemoteScannerPage() {
                 </button>
               )}
 
+              {hasZoom && (
+                <button
+                  type="button"
+                  onClick={toggleZoom}
+                  className="p-3 bg-black/60 hover:bg-black/80 text-white rounded-2xl backdrop-blur-md border border-white/20 transition-all cursor-pointer shadow-lg flex items-center justify-center font-bold font-mono text-[10px]"
+                  title="Alternar Zoom"
+                >
+                  <ZoomIn className="w-5 h-5 absolute opacity-30" />
+                  <span className="relative z-10">{zoomLevel}x</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={toggleCameraFacing}
